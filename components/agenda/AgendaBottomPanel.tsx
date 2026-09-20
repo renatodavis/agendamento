@@ -4,6 +4,7 @@ import { useAppointments } from '@/lib/useAppointments'
 import type { Appointment, AppointmentStatus, Doctor } from '@/types'
 import ApprovalPanel, { useApprovalCount } from './ApprovalPanel'
 import ClinicConfigPanel from '@/components/settings/ClinicConfigPanel'
+import AgendaQueueView from './AgendaQueueView'
 
 const DOCTOR_COLORS = ['#3B9EFF', '#14C38E', '#F0A500', '#A78BFA', '#FB923C', '#F472B6', '#22D3EE', '#EF4444']
 
@@ -200,6 +201,7 @@ function ApptDetail({ appt, onAttend, onCancel, detailRef }: {
 // ── Main ──────────────────────────────────────────────────────────────
 export default function AgendaBottomPanel() {
   const [panelView, setPanelView]       = useState<'agenda' | 'approvals' | 'config'>('agenda')
+  const [agendaView, setAgendaView]     = useState<'list' | 'queue'>('list')
   const [dayOffset, setDayOffset]       = useState(0)
   const [selId, setSelId]               = useState<string | null>(null)
   const [filter, setFilter]             = useState('todos')
@@ -375,7 +377,7 @@ export default function AgendaBottomPanel() {
           ))}
         </div>
 
-        {/* Stats */}
+        {/* Stats + view toggle */}
         <div className="flex items-center gap-2 shrink-0">
           {counts.atendida > 0 && (
             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border"
@@ -390,6 +392,17 @@ export default function AgendaBottomPanel() {
             </span>
           )}
           <span className="text-[10px]" style={{ color: 'var(--muted)' }}>{counts.todos} total</span>
+          <button
+            onClick={() => setAgendaView(v => v === 'list' ? 'queue' : 'list')}
+            title={agendaView === 'list' ? 'Ver fila de atendimento' : 'Ver lista'}
+            className="px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all"
+            style={{
+              color: agendaView === 'queue' ? '#14C38E' : 'var(--muted)',
+              borderColor: agendaView === 'queue' ? '#14C38E' : 'var(--border)',
+              background: agendaView === 'queue' ? '#14C38E18' : 'var(--card)',
+            }}>
+            {agendaView === 'list' ? '🎫 Fila' : '☰ Lista'}
+          </button>
         </div>
       </div>
 
@@ -426,7 +439,22 @@ export default function AgendaBottomPanel() {
         </div>
       )}
 
-      {/* Body */}
+      {/* Body — queue view */}
+      {agendaView === 'queue' && (
+        <AgendaQueueView
+          appointments={filtered}
+          loading={loading}
+          dayOffset={dayOffset}
+          onDayChange={setDayOffset}
+          onAttend={handleAttend}
+          onSwitchView={() => setAgendaView('list')}
+          selectedId={selId}
+          onSelect={a => setSelId(prev => prev === a.id ? null : a.id)}
+        />
+      )}
+
+      {/* Body — list view */}
+      {agendaView === 'list' && (
       <div className="flex flex-1 min-h-0">
         {/* List */}
         <div className="w-[54%] overflow-y-auto border-r" style={{ borderColor: 'var(--border)' }}>
@@ -454,6 +482,7 @@ export default function AgendaBottomPanel() {
           <ApptDetail appt={selAppt} onAttend={handleAttend} onCancel={handleCancel} detailRef={detailRef} />
         </div>
       </div>
+      )}
 
       </>} {/* end agenda panel */}
     </div>
