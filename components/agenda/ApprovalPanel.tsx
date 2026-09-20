@@ -9,6 +9,14 @@ const supabase = createClient(
 
 type RequestType = 'disponibilidade' | 'cancelamento' | 'atendente' | 'alteracao_horario'
 
+type ApptDetails = {
+  appointment_id?: string
+  scheduled_at?: string
+  doctor_name?: string
+  doctor_specialty?: string
+  appointment_status?: string
+}
+
 type ApprovalRequest = {
   id: string
   request_type: RequestType
@@ -16,7 +24,7 @@ type ApprovalRequest = {
   suggested_at: string | null
   message_to_patient: string | null
   message_to_receptionist: string | null
-  details: Record<string, unknown> | null
+  details: ApptDetails | null
   status: string
   created_at: string
   doctor: { name: string; specialty: string } | null
@@ -153,25 +161,43 @@ export default function ApprovalPanel() {
               </span>
             </div>
 
-            {/* Slot — only for disponibilidade */}
-            {req.request_type === 'disponibilidade' && req.suggested_at && (() => {
-              const { date, time } = fmtSlot(req.suggested_at)
+            {/* Appointment details block — for all types that have appointment data */}
+            {(() => {
+              const slotIso = req.request_type === 'disponibilidade'
+                ? req.suggested_at
+                : req.details?.scheduled_at ?? null
+              const doctorName = req.doctor?.name ?? req.details?.doctor_name
+              const doctorSpec = req.doctor?.specialty ?? req.details?.doctor_specialty
+              if (!slotIso && !doctorName) return null
+              const { date, time } = slotIso ? fmtSlot(slotIso) : { date: null, time: null }
               return (
                 <div className="mx-3 px-2.5 py-2 rounded-md flex items-center gap-2"
                   style={{ background: 'var(--panel)' }}>
                   <span className="text-base">📅</span>
                   <div>
-                    <div className="text-[11px] font-semibold">{date} às {time}</div>
-                    <div className="text-[9px]" style={{ color: 'var(--muted)' }}>horário sugerido pelo sistema</div>
+                    {date && (
+                      <div className="text-[11px] font-semibold">{date} às {time}</div>
+                    )}
+                    {doctorName && (
+                      <div className="text-[10px]" style={{ color: 'var(--muted)' }}>
+                        {doctorName}{doctorSpec ? ` · ${doctorSpec}` : ''}
+                      </div>
+                    )}
+                    {req.request_type === 'disponibilidade' && (
+                      <div className="text-[9px]" style={{ color: 'var(--muted)' }}>horário sugerido pelo sistema</div>
+                    )}
                   </div>
                 </div>
               )
             })()}
 
-            {/* Notes / message to receptionist */}
-            {req.request_type !== 'disponibilidade' && req.message_to_receptionist && (
-              <div className="mx-3 px-2.5 py-2 rounded-md text-[10px]" style={{ background: 'var(--panel)', color: 'var(--foreground)' }}>
-                {req.message_to_receptionist}
+            {/* Patient note / message to receptionist */}
+            {req.message_to_receptionist && req.message_to_receptionist !== 'Cancelamento de consulta'
+              && req.message_to_receptionist !== 'Solicitação de atendimento humano'
+              && req.message_to_receptionist !== 'Alteração de horário' && (
+              <div className="mx-3 px-2.5 py-1.5 rounded-md text-[10px] italic"
+                style={{ background: 'var(--panel)', color: 'var(--muted)', borderLeft: `2px solid ${cfg.border}` }}>
+                "{req.message_to_receptionist}"
               </div>
             )}
 

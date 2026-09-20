@@ -54,6 +54,22 @@ export async function POST(req: NextRequest) {
     const patientName = approval.patient_name ?? 'Paciente'
     const now = new Date().toISOString()
 
+    // Helper: format appointment details from details jsonb or doctor join
+    type ApptDetails = { appointment_id?: string; scheduled_at?: string; doctor_name?: string; doctor_specialty?: string }
+    const det = approval.details as ApptDetails | null
+    const doc = approval.doctor as unknown as { name: string; specialty: string } | null
+    const doctorName = doc?.name ?? det?.doctor_name ?? null
+    const doctorSpec = doc?.specialty ?? det?.doctor_specialty ?? null
+    const apptIso = det?.scheduled_at ?? null
+    function fmtAppt() {
+      if (!apptIso) return null
+      const d = new Date(apptIso)
+      const date = d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })
+      const time = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
+      return `${date} às ${time}`
+    }
+    const apptStr = fmtAppt()
+
     // ── disponibilidade: approve ──────────────────────────────────────────────
     if (action === 'approve') {
       await db.from('approval_requests').update({
@@ -110,9 +126,13 @@ export async function POST(req: NextRequest) {
         reviewed_by: 'receptionist',
       }).eq('id', id)
 
+      const apptLine = apptStr && doctorName
+        ? `📅 *${apptStr}*\n👨‍⚕️ ${doctorName}${doctorSpec ? ` (${doctorSpec})` : ''}\n\n`
+        : apptStr ? `📅 *${apptStr}*\n\n` : ''
       const msg =
         `Olá, *${patientName}*! ✅\n\n` +
         `Sua consulta foi cancelada conforme solicitado.\n\n` +
+        apptLine +
         `Se precisar remarcar, é só nos chamar aqui no WhatsApp! — Clínica São Lucas 🏥`
       await notifyAndLog(db, approval.session_id, msg)
 
@@ -128,12 +148,15 @@ export async function POST(req: NextRequest) {
       }).eq('id', id)
 
       const isAlteracao = approval.request_type === 'alteracao_horario'
+      const apptInfo = apptStr
+        ? `\n📅 *${apptStr}*${doctorName ? `\n👨‍⚕️ ${doctorName}` : ''}\n`
+        : ''
       const msg = isAlteracao
         ? `Olá, *${patientName}*! 🗓\n\n` +
-          `Confirmamos que sua consulta foi mantida no horário original.\n\n` +
+          `Confirmamos que sua consulta foi mantida no horário original.${apptInfo}\n` +
           `Se quiser remarcar, é só nos dizer a data preferida! — Clínica São Lucas 🏥`
         : `Olá, *${patientName}*! 😊\n\n` +
-          `Ótimo! Sua consulta foi mantida. Aguardamos sua presença!\n\n` +
+          `Ótimo! Sua consulta foi mantida. Aguardamos sua presença!${apptInfo}\n` +
           `Se precisar de algo mais, estamos aqui. — Clínica São Lucas 🏥`
       await notifyAndLog(db, approval.session_id, msg)
 
@@ -155,9 +178,12 @@ export async function POST(req: NextRequest) {
           `Nossa equipe já está ciente da sua solicitação e entrará em contato com você em breve.\n\n` +
           `Clínica São Lucas 🏥`
       } else {
+        const apptInfo = apptStr
+          ? `\n📅 *${apptStr}*${doctorName ? `\n👨‍⚕️ ${doctorName}` : ''}\n`
+          : ''
         msg =
           `Olá, *${patientName}*! 🗓\n\n` +
-          `Sua solicitação de remarcação foi processada. Nossa equipe verificará a disponibilidade e confirmará o novo horário em breve.\n\n` +
+          `Sua solicitação de remarcação foi processada. Nossa equipe verificará a disponibilidade e confirmará o novo horário em breve.${apptInfo}\n` +
           `Clínica São Lucas 🏥`
       }
       await notifyAndLog(db, approval.session_id, msg)

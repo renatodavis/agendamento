@@ -278,14 +278,61 @@ async function escalarParaRecepcao(
       alteracao_horario: 'Alteração de horário',
     }
 
+    // Auto-fetch the patient's next upcoming appointment for context
+    let doctorId: string | null = null
+    let appointmentDetails: Record<string, unknown> | null = null
+
+    const apptId = input.appointment_id
+    if (apptId) {
+      const { data: appt } = await db
+        .from('appointments')
+        .select('id, scheduled_at, status, doctor:doctors(id, name, specialty)')
+        .eq('id', apptId)
+        .single()
+      if (appt) {
+        const doc = appt.doctor as unknown as { id: string; name: string; specialty: string } | null
+        doctorId = doc?.id ?? null
+        appointmentDetails = {
+          appointment_id: appt.id,
+          scheduled_at: appt.scheduled_at,
+          appointment_status: appt.status,
+          doctor_name: doc?.name,
+          doctor_specialty: doc?.specialty,
+        }
+      }
+    } else if (patientId) {
+      // Look up next upcoming active appointment
+      const { data: appts } = await db
+        .from('appointments')
+        .select('id, scheduled_at, status, doctor:doctors(id, name, specialty)')
+        .eq('patient_id', patientId)
+        .not('status', 'in', '("cancelada","lista_espera")')
+        .gte('scheduled_at', new Date().toISOString())
+        .order('scheduled_at', { ascending: true })
+        .limit(1)
+      const appt = appts?.[0]
+      if (appt) {
+        const doc = appt.doctor as unknown as { id: string; name: string; specialty: string } | null
+        doctorId = doc?.id ?? null
+        appointmentDetails = {
+          appointment_id: appt.id,
+          scheduled_at: appt.scheduled_at,
+          appointment_status: appt.status,
+          doctor_name: doc?.name,
+          doctor_specialty: doc?.specialty,
+        }
+      }
+    }
+
     const { data: req, error } = await db.from('approval_requests').insert({
-      session_id: sessionId ?? null,
-      patient_id: patientId,
-      patient_name: patientName,
-      request_type: input.request_type,
-      status: 'pending',
+      session_id:              sessionId ?? null,
+      patient_id:              patientId,
+      patient_name:            patientName,
+      doctor_id:               doctorId,
+      request_type:            input.request_type,
+      status:                  'pending',
       message_to_receptionist: input.notes ?? typeLabels[input.request_type],
-      details: input.appointment_id ? { appointment_id: input.appointment_id } : null,
+      details:                 appointmentDetails,
     }).select('id').single()
 
     if (error) return `Erro ao criar solicitação: ${error.message}`
