@@ -226,8 +226,8 @@ export default function WaPanel({ onPipelineChange, onLog, onStats }: Props) {
 
   // ── Render ─────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col shrink-0 border-r"
-      style={{ width: 270, minWidth: 200, borderColor: 'var(--border)', background: 'var(--panel)' }}>
+    <div className="flex flex-col"
+      style={{ width: '100%', height: '100%', background: 'var(--panel)' }}>
 
       {/* ── Header ── */}
       {view === 'list' ? (
@@ -338,7 +338,7 @@ export default function WaPanel({ onPipelineChange, onLog, onStats }: Props) {
         <>
           {/* Mensagens */}
           <div className="flex-1 overflow-y-auto px-2 py-2 flex flex-col gap-1.5"
-            style={{ background: '#ECF5F1', scrollbarWidth: 'thin', scrollbarColor: 'var(--border) transparent' }}>
+            style={{ background: 'var(--chat-bg)' }}>
             {messages.length === 0 && !loading && (
               <div className="flex-1 flex items-center justify-center">
                 <p className="text-[11px]" style={{ color: 'var(--muted)' }}>Início da conversa</p>
@@ -349,10 +349,11 @@ export default function WaPanel({ onPipelineChange, onLog, onStats }: Props) {
                 <div className="max-w-[88%]">
                   <div className="px-2.5 py-1.5 text-[12px] leading-snug"
                     style={{
-                      background: m.direction === 'inbound' ? '#D4EDD5' : '#FFFFFF',
-                      border: m.direction === 'outbound' ? '1px solid var(--border)' : 'none',
+                      background: m.direction === 'inbound' ? 'var(--chat-in)' : 'var(--chat-out)',
+                      border: '1px solid var(--border)',
                       borderRadius: m.direction === 'inbound' ? '12px 3px 12px 12px' : '3px 12px 12px 12px',
-                      color: '#0D1B2A', whiteSpace: 'pre-wrap',
+                      color: 'var(--chat-text)', whiteSpace: 'pre-wrap',
+                      boxShadow: 'var(--shadow-sm)',
                     }}>
                     {m.body}
                   </div>
@@ -367,7 +368,7 @@ export default function WaPanel({ onPipelineChange, onLog, onStats }: Props) {
             {loading && (
               <div className="flex justify-start">
                 <div className="px-3 py-2 flex items-center gap-1 rounded-[3px_12px_12px_12px]"
-                  style={{ background: '#FFFFFF', border: '1px solid var(--border)' }}>
+                  style={{ background: 'var(--chat-out)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
                   {[0, 1, 2].map(i => (
                     <span key={i} className="w-1.5 h-1.5 rounded-full animate-bounce"
                       style={{ background: 'var(--muted)', animationDelay: `${i * 0.15}s` }} />

@@ -30,9 +30,9 @@ export default function LogPanel({ entries, stats }: {
   stats: { total: number; tokens: number; latency: number; cost: number }
 }) {
   return (
-    <div className="flex flex-col border-l shrink-0" style={{
-      width: 230, minWidth: 180,
-      background: 'var(--panel)', borderColor: 'var(--border)',
+    <div className="flex flex-col" style={{
+      width: '100%', height: '100%',
+      background: 'var(--panel)',
     }}>
       {/* Header */}
       <div className="flex items-center justify-between px-3 h-[42px] border-b shrink-0"
