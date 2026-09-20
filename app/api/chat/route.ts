@@ -175,12 +175,15 @@ async function consultarDisponibilidade(
     const endDate = new Date(startDate); endDate.setUTCDate(endDate.getUTCDate() + 30)
 
     for (const doctor of matchingDoctors) {
-      const { data: schedules } = await db
+      const { data: rawSchedules } = await db
         .from('doctor_schedules')
         .select('day_of_week, start_time, end_time, slot_minutes')
         .eq('doctor_id', doctor.id)
 
-      if (!schedules?.length) continue
+      // Fallback: if no schedule registered, assume Mon–Fri 08:00–17:00
+      const schedules = rawSchedules?.length
+        ? rawSchedules
+        : [1, 2, 3, 4, 5].map(d => ({ day_of_week: d, start_time: '08:00', end_time: '17:00', slot_minutes: 60 }))
 
       const { data: existingAppts } = await db
         .from('appointments')
