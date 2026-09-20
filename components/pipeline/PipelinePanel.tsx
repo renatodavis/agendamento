@@ -1,4 +1,5 @@
 'use client'
+import { useState } from 'react'
 
 export type PipelineState = {
   active: string[]
@@ -38,14 +39,22 @@ const ALL_AGENTS = Object.keys(AGENT_META)
 export default function PipelinePanel({ state }: { state: PipelineState }) {
   const { active, done, workflow } = state
   const isIdle = active.length === 0 && done.length === 0
+  const [collapsed, setCollapsed] = useState(false)
 
   const steps = workflow ? (WORKFLOW_STEPS[workflow] ?? ALL_AGENTS.slice(0, 5)) : ALL_AGENTS.slice(0, 5)
 
   return (
     <div className="flex flex-col shrink-0 border-t" style={{ borderColor: 'var(--border)', background: 'var(--panel)' }}>
       {/* Header */}
-      <div className="flex items-center justify-between px-4 h-[38px] border-b shrink-0"
-        style={{ borderColor: 'var(--border)' }}>
+      <div
+        className="flex items-center justify-between px-4 h-[38px] shrink-0"
+        style={{
+          borderBottom: collapsed ? 'none' : '1px solid var(--border)',
+          cursor: 'pointer',
+          userSelect: 'none',
+        }}
+        onClick={() => setCollapsed(v => !v)}
+      >
         <div className="flex items-center gap-2">
           <span className="w-[5px] h-[5px] rounded-full"
             style={{ background: active.length > 0 ? 'var(--gold)' : done.length > 0 ? 'var(--green)' : 'var(--border)',
@@ -64,12 +73,22 @@ export default function PipelinePanel({ state }: { state: PipelineState }) {
             </span>
           )}
         </div>
-        <span className="text-[9px] italic" style={{ color: 'var(--muted)' }}>
-          {active.length > 0 ? 'processando…' : done.length > 0 ? 'concluído' : 'aguardando'}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span className="text-[9px] italic" style={{ color: 'var(--muted)' }}>
+            {active.length > 0 ? 'processando…' : done.length > 0 ? 'concluído' : 'aguardando'}
+          </span>
+          <span style={{
+            fontSize: 10, color: 'var(--muted)',
+            transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+            transition: 'transform .2s ease',
+            display: 'inline-block',
+            lineHeight: 1,
+          }}>▾</span>
+        </div>
       </div>
 
-      {/* Linear steps */}
+      {/* Linear steps — hidden when collapsed */}
+      {!collapsed && (
       <div className="flex items-center px-4 py-3 gap-0 overflow-x-auto"
         style={{ scrollbarWidth: 'none' }}>
         {steps.map((id, i) => {
@@ -140,6 +159,7 @@ export default function PipelinePanel({ state }: { state: PipelineState }) {
           </div>
         )}
       </div>
+      )}
 
       <style>{`
         @keyframes ppulse { 0%,100%{opacity:1} 50%{opacity:.3} }

@@ -146,114 +146,94 @@ async function executarAgendamento(
 
 async function consultarDisponibilidade(
   db: SupabaseClient,
-  input: { specialty: string; preferred_date?: string; patient_name?: string },
-  sessionId: string | undefined
+  input: { specialty: string; preferred_date?: string },
 ): Promise<string> {
   try {
     const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+
+    // Find matching doctor(s) by specialty
     const { data: allDoctors } = await db.from('doctors').select('id, name, specialty')
-    const doctor = (allDoctors ?? []).find(d => {
+    const matchingDoctors = (allDoctors ?? []).filter(d => {
       const ds = norm(d.specialty); const ss = norm(input.specialty)
       return ds.includes(ss.slice(0, 5)) || ss.includes(ds.slice(0, 5))
     })
-    if (!doctor) {
-      return `Especialidade "${input.specialty}" não encontrada. Disponíveis: ${(allDoctors ?? []).map(d => d.specialty).join(', ')}`
+
+    if (!matchingDoctors.length) {
+      const available = (allDoctors ?? []).map(d => d.specialty).join(', ')
+      return JSON.stringify({ error: true, message: `Especialidade "${input.specialty}" não encontrada. Disponíveis: ${available}` })
     }
 
-    const { data: schedules } = await db
-      .from('doctor_schedules')
-      .select('day_of_week, start_time, end_time, slot_minutes')
-      .eq('doctor_id', doctor.id)
-
-    if (!schedules?.length) {
-      return `${doctor.name} ainda não tem horários configurados. Nossa recepção entrará em contato para agendar.`
-    }
-
-    const schedMap = new Map(schedules.map(s => [s.day_of_week as number, s]))
-
-    // Look from tomorrow or from preferred_date, up to 21 days
-    const tomorrow = new Date(); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1); tomorrow.setUTCHours(0, 0, 0, 0)
-    const prefDate = input.preferred_date ? new Date(input.preferred_date + 'T00:00:00Z') : tomorrow
-    const startDate = prefDate > tomorrow ? prefDate : tomorrow
-    const endDate = new Date(startDate); endDate.setUTCDate(endDate.getUTCDate() + 21)
-
-    const { data: existingAppts } = await db
-      .from('appointments')
-      .select('scheduled_at')
-      .eq('doctor_id', doctor.id)
-      .gte('scheduled_at', startDate.toISOString())
-      .lte('scheduled_at', endDate.toISOString())
-      .not('status', 'in', '("cancelada","lista_espera")')
-
-    const availableSlots: Date[] = []
-    const cur = new Date(startDate)
-    while (availableSlots.length < 3 && cur <= endDate) {
-      const sched = schedMap.get(cur.getUTCDay())
-      if (sched) {
-        const [sh, sm] = (sched.start_time as string).split(':').map(Number)
-        const [eh] = (sched.end_time as string).split(':').map(Number)
-        const slotMin = (sched.slot_minutes as number) ?? 60
-        const slot = new Date(cur); slot.setUTCHours(sh, sm, 0, 0)
-        while (slot.getUTCHours() < eh && availableSlots.length < 3) {
-          const slotDay = slot.toISOString().split('T')[0]
-          const slotHour = slot.getUTCHours()
-          const isBooked = (existingAppts ?? []).some(a => {
-            const ap = new Date(a.scheduled_at)
-            return ap.toISOString().split('T')[0] === slotDay && ap.getUTCHours() === slotHour
-          })
-          if (!isBooked) availableSlots.push(new Date(slot))
-          slot.setUTCMinutes(slot.getUTCMinutes() + slotMin)
-        }
-      }
-      cur.setUTCDate(cur.getUTCDate() + 1)
-    }
-
-    if (!availableSlots.length) {
-      return `Sem disponibilidade para ${doctor.name} nos próximos 21 dias. Tente outra especialidade ou data futura.`
-    }
-
-    // Get patient ID from session
-    let patientId: string | null = null
-    if (sessionId) {
-      const { data: sess } = await db.from('wa_sessions').select('patient_id').eq('id', sessionId).single()
-      patientId = sess?.patient_id ?? null
-    }
-
-    const best = availableSlots[0]
-    const fmtDate = (d: Date) => d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' })
+    const fmtDate = (d: Date) => d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'UTC' })
     const fmtTime = (d: Date) => d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
 
-    const messageToPatient =
-      `Olá! Verificamos a agenda e encontramos uma disponibilidade com *${doctor.name}* (${doctor.specialty}):\n\n` +
-      `📅 *${fmtDate(best)}* às *${fmtTime(best)}*\n\n` +
-      `Deseja confirmar este horário?\nResponda *SIM* para confirmar ou *NÃO* para ver outras opções.`
+    // Collect slots across all matching doctors
+    const allSlots: { doctor: typeof matchingDoctors[0]; slot: Date }[] = []
 
-    const { data: approvalReq } = await db
-      .from('approval_requests')
-      .insert({
-        session_id: sessionId ?? null,
-        patient_id: patientId,
-        patient_name: input.patient_name ?? 'Paciente',
-        doctor_id: doctor.id,
-        suggested_at: best.toISOString(),
-        message_to_patient: messageToPatient,
-        status: 'pending',
-      })
-      .select('id')
-      .single()
+    const tomorrow = new Date(); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1); tomorrow.setUTCHours(0, 0, 0, 0)
+    const prefDate = input.preferred_date ? new Date(input.preferred_date + 'T00:00:00Z') : tomorrow
+    const startDate = prefDate >= tomorrow ? prefDate : tomorrow
+    const endDate = new Date(startDate); endDate.setUTCDate(endDate.getUTCDate() + 30)
 
-    const altSlots = availableSlots.slice(1).map(s =>
-      `• ${s.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'UTC' })} às ${fmtTime(s)}`
-    )
+    for (const doctor of matchingDoctors) {
+      const { data: schedules } = await db
+        .from('doctor_schedules')
+        .select('day_of_week, start_time, end_time, slot_minutes')
+        .eq('doctor_id', doctor.id)
+
+      if (!schedules?.length) continue
+
+      const { data: existingAppts } = await db
+        .from('appointments')
+        .select('scheduled_at')
+        .eq('doctor_id', doctor.id)
+        .gte('scheduled_at', startDate.toISOString())
+        .lte('scheduled_at', endDate.toISOString())
+        .not('status', 'in', '("cancelada","lista_espera")')
+
+      const schedMap = new Map(schedules.map(s => [s.day_of_week as number, s]))
+      const cur = new Date(startDate)
+      while (cur <= endDate && allSlots.filter(s => s.doctor.id === doctor.id).length < 3) {
+        const sched = schedMap.get(cur.getUTCDay())
+        if (sched) {
+          const [sh, sm] = (sched.start_time as string).split(':').map(Number)
+          const [eh] = (sched.end_time as string).split(':').map(Number)
+          const slotMin = (sched.slot_minutes as number) ?? 60
+          const slot = new Date(cur); slot.setUTCHours(sh, sm, 0, 0)
+          while (slot.getUTCHours() < eh && allSlots.filter(s => s.doctor.id === doctor.id).length < 3) {
+            const slotDay = slot.toISOString().split('T')[0]
+            const slotHour = slot.getUTCHours()
+            const isBooked = (existingAppts ?? []).some(a => {
+              const ap = new Date(a.scheduled_at)
+              return ap.toISOString().split('T')[0] === slotDay && ap.getUTCHours() === slotHour
+            })
+            if (!isBooked) allSlots.push({ doctor, slot: new Date(slot) })
+            slot.setUTCMinutes(slot.getUTCMinutes() + slotMin)
+          }
+        }
+        cur.setUTCDate(cur.getUTCDate() + 1)
+      }
+    }
+
+    if (!allSlots.length) {
+      const names = matchingDoctors.map(d => d.name).join(', ')
+      return JSON.stringify({ error: true, message: `Nenhum horário disponível para ${input.specialty} nos próximos 30 dias (${names}). Tente contato direto com a recepção.` })
+    }
+
+    // Sort by slot date and build formatted list (up to 5)
+    allSlots.sort((a, b) => a.slot.getTime() - b.slot.getTime())
+    const top = allSlots.slice(0, 5)
+
+    const formattedSlots = top.map((s, i) =>
+      `${i + 1}. *${fmtDate(s.slot)}* às *${fmtTime(s.slot)}* — ${s.doctor.name} (${s.doctor.specialty})`
+    ).join('\n')
 
     return JSON.stringify({
-      pending_approval: true,
-      approval_id: approvalReq?.id,
-      doctor_name: doctor.name,
-      specialty: doctor.specialty,
-      suggested_at: best.toISOString(),
-      alternative_slots: availableSlots.slice(1).map(s => s.toISOString()),
-      info: `Solicitação criada (aguarda aprovação da recepção). Horário sugerido: ${fmtDate(best)} às ${fmtTime(best)} com ${doctor.name}. Alternativas: ${altSlots.join(', ')}`,
+      slots_available: true,
+      specialty: input.specialty,
+      doctors: matchingDoctors.map(d => d.name),
+      total_slots: top.length,
+      slots: top.map(s => ({ doctor_name: s.doctor.name, doctor_id: s.doctor.id, scheduled_at: s.slot.toISOString() })),
+      formatted_slots: formattedSlots,
     })
   } catch (err) {
     return `Erro ao consultar disponibilidade: ${err instanceof Error ? err.message : 'desconhecido'}`
@@ -319,15 +299,20 @@ async function consultarAgendamentos(
 }
 
 type ServiceConfig = { name: string; description: string }
+type DoctorInfo    = { name: string; specialty: string }
 
 async function loadClinicConfig(db: SupabaseClient): Promise<{
   clinicName: string
   workingHours: string
   services: ServiceConfig[]
   outOfScopeResponse: string
+  doctors: DoctorInfo[]
 }> {
-  const { data } = await db.from('clinic_config').select('key, value')
-  const cfg = Object.fromEntries((data ?? []).map(r => [r.key, r.value]))
+  const [{ data: cfgRows }, { data: doctorsData }] = await Promise.all([
+    db.from('clinic_config').select('key, value'),
+    db.from('doctors').select('name, specialty').order('specialty'),
+  ])
+  const cfg = Object.fromEntries((cfgRows ?? []).map(r => [r.key, r.value]))
 
   const services: ServiceConfig[] = Array.isArray(cfg.services)
     ? (cfg.services as ServiceConfig[])
@@ -347,6 +332,7 @@ async function loadClinicConfig(db: SupabaseClient): Promise<{
     outOfScopeResponse: typeof cfg.out_of_scope_response === 'string'
       ? cfg.out_of_scope_response
       : 'Lamento, mas não atendemos essa especialidade. Posso ajudar com: {services_list}',
+    doctors: (doctorsData ?? []) as DoctorInfo[],
   }
 }
 
@@ -356,24 +342,41 @@ function buildSystemPrompt(cfg: Awaited<ReturnType<typeof loadClinicConfig>>): s
     .join('\n')
   const serviceNames = cfg.services.map(s => s.name).join(', ')
 
+  const doctorsList = cfg.doctors.length > 0
+    ? cfg.doctors.map(d => `• ${d.name} — ${d.specialty}`).join('\n')
+    : '(nenhum médico cadastrado ainda)'
+
   const outOfScope = cfg.outOfScopeResponse
     .replace('{clinic_name}', cfg.clinicName)
     .replace('{services_list}', servicesList)
 
-  return `Você é o Coordenador Clínico da ${cfg.clinicName}, responsável por orquestrar o atendimento de pacientes via WhatsApp.
+  const welcomeMsg =
+    `Olá! Seja bem-vindo(a) à *${cfg.clinicName}*! 🏥\n\n` +
+    `Atendemos as seguintes especialidades:\n${servicesList}\n\n` +
+    `${cfg.doctors.length > 0 ? `👨‍⚕️ Nossos médicos:\n${doctorsList}\n\n` : ''}` +
+    `⏰ Horário de atendimento: ${cfg.workingHours}\n\n` +
+    `Como posso ajudar?`
 
-SERVIÇOS DISPONÍVEIS NA ${cfg.clinicName.toUpperCase()}:
+  return `Você é o assistente virtual da ${cfg.clinicName}, responsável pelo atendimento de pacientes via WhatsApp.
+
+DADOS DA CLÍNICA (use SEMPRE estas informações — nunca invente dados):
+Nome: ${cfg.clinicName}
+Horário: ${cfg.workingHours}
+
+ESPECIALIDADES E SERVIÇOS DISPONÍVEIS:
 ${servicesList}
 
-Horário de funcionamento: ${cfg.workingHours}
+MÉDICOS CADASTRADOS:
+${doctorsList}
+
+MENSAGEM DE BOAS-VINDAS (use quando for o primeiro contato ou saudação sem contexto):
+${welcomeMsg}
 
 REGRA DE ESCOPO (OBRIGATÓRIA):
 - Atenda APENAS solicitações relacionadas às especialidades listadas acima: ${serviceNames}
-- Se o paciente solicitar uma especialidade, serviço ou procedimento NÃO listado, responda EXATAMENTE com esta mensagem (adaptando conforme o contexto, mas mantendo o tom):
-  "${outOfScope}"
-- Nunca tente agendar ou buscar disponibilidade para uma especialidade fora da lista.
-- Exemplos de serviços fora do escopo: emergência 24h, cirurgia, internação, pronto-socorro, especialidades não listadas.
-- Se a solicitação estiver fora do escopo mas houver urgência aparente → ainda assim redirecione para o SAMU (192) ou pronto-socorro, mas informe que a clínica não oferece esse atendimento.`
+- Se o paciente solicitar especialidade NÃO listada, responda: "${outOfScope}"
+- Nunca tente agendar para especialidade fora da lista.
+- Em caso de urgência aparente (mesmo fora do escopo) → redirecione ao SAMU (192) ou pronto-socorro e informe que a clínica não oferece esse atendimento.`
 }
 
 // Workflow definitions — maps to real Claude tool calls
@@ -413,12 +416,12 @@ VERIFICAÇÃO DE AGENDA EXISTENTE (obrigatório):
 - SEMPRE que o paciente perguntar sobre consultas, agenda, horários ou quiser agendar → chame consultar_agendamentos PRIMEIRO
 - Se já tiver consulta marcada → informe e pergunte se deseja fazer outra ou confirmar a existente
 
-FLUXO DE DISPONIBILIDADE COM APROVAÇÃO HUMANA (HITL):
+FLUXO DE DISPONIBILIDADE:
 - Quando o paciente não souber a data, pedir sugestão, ou perguntar "quando tem vaga" → use consultar_disponibilidade
-- A ferramenta encontra o próximo horário livre e cria uma solicitação para a recepção aprovar ANTES de enviar ao paciente
-- Após chamar consultar_disponibilidade com sucesso (pending_approval: true), diga EXATAMENTE:
-  "Verificamos a agenda de [médico]! Nossa equipe está confirmando a disponibilidade e em breve você receberá uma confirmação por aqui. 📋"
-- NÃO mencione a data específica ao paciente — aguarde a recepção aprovar
+- Se a ferramenta retornar slots_available: true, apresente o campo formatted_slots ao paciente assim:
+  "Encontrei os seguintes horários disponíveis:\n[formatted_slots]\nQual prefere?"
+- Após o paciente escolher um horário → inicie o fluxo de confirmação SIM/NÃO e depois chame agendar_consulta com a data e médico escolhidos
+- Se slots_available for false ou error for true → apresente a mensagem do campo "message" e ofereça contato com a recepção
 - Se o paciente já souber a data/hora exata que quer → use o fluxo normal de confirmação SIM/NÃO e depois agendar_consulta
 
 CONFLITO DE HORÁRIO:
@@ -610,8 +613,8 @@ export async function POST(req: NextRequest) {
             const { status_filter } = t.input as { status_filter?: string }
             content = await consultarAgendamentos(db, sessionId, status_filter)
           } else if (t.name === 'consultar_disponibilidade') {
-            const { specialty, preferred_date, patient_name } = t.input as { specialty: string; preferred_date?: string; patient_name?: string }
-            content = await consultarDisponibilidade(db, { specialty, preferred_date, patient_name }, sessionId)
+            const { specialty, preferred_date } = t.input as { specialty: string; preferred_date?: string }
+            content = await consultarDisponibilidade(db, { specialty, preferred_date })
           } else if (t.name === 'verificar_urgencia') {
             content = JSON.stringify({ urgencia: true, encaminhar: 'pronto-socorro' })
           }
