@@ -43,32 +43,77 @@ function nowT() {
 }
 
 // ── Row ─────────────────────────────────────────────────────────────
-function ApptRow({ appt, selected, onSelect }: { appt: Appointment; selected: boolean; onSelect: () => void }) {
+function ApptRow({ appt, selected, compact, onSelect, onAttend }: {
+  appt: Appointment; selected: boolean; compact?: boolean
+  onSelect: () => void; onAttend: (id: string) => void
+}) {
   const sc = STATUS[appt.status]
+  const canAct = appt.status !== 'atendida' && appt.status !== 'cancelada'
   return (
     <div onClick={onSelect}
-      className="flex items-center gap-2 px-3 py-1.5 border-b cursor-pointer transition-colors"
+      className="flex items-center gap-3 border-b cursor-pointer transition-colors"
       style={{
+        minHeight: compact ? 52 : 60,
+        padding: compact ? '0 12px' : '0 16px',
         borderColor: 'var(--border)',
-        borderLeft: `3px solid ${selected ? sc.color : 'transparent'}`,
-        background: selected ? `${sc.color}0a` : 'transparent',
+        borderLeft: `4px solid ${selected ? sc.color : 'transparent'}`,
+        background: selected ? `${sc.color}0d` : 'transparent',
       }}>
-      <span className="text-[11px] font-bold tabular-nums w-8 shrink-0" style={{ color: sc.color }}>
-        {fmtTime(appt.scheduled_at)}
-      </span>
-      <span className="w-2 h-2 rounded-full shrink-0 border"
-        style={{ background: sc.fill ? sc.color : 'transparent', borderColor: sc.color }} />
-      <span className="text-sm shrink-0">{appt.patient?.photo_emoji ?? '👤'}</span>
-      <div className="flex-1 min-w-0">
-        <div className="text-[11px] font-semibold truncate">{appt.patient?.name}</div>
-        <div className="text-[9px] truncate" style={{ color: 'var(--muted)' }}>
-          {appt.doctor?.name} · {appt.doctor?.specialty}
+      {/* Time + status */}
+      <div className="shrink-0" style={{ width: compact ? 40 : 48 }}>
+        <div className="font-black tabular-nums leading-none"
+          style={{ fontSize: compact ? 13 : 15, color: sc.color }}>
+          {fmtTime(appt.scheduled_at)}
+        </div>
+        <div className="mt-0.5 font-semibold uppercase tracking-wide"
+          style={{ fontSize: 8, color: sc.color, opacity: .75 }}>
+          {sc.icon} {sc.label.split(' ')[0]}
         </div>
       </div>
-      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border shrink-0 hidden sm:inline-flex"
-        style={{ color: sc.color, borderColor: sc.color, background: `${sc.color}18` }}>
-        {sc.icon} {sc.label}
-      </span>
+
+      {/* Emoji */}
+      {!compact && <span className="text-[22px] leading-none shrink-0">{appt.patient?.photo_emoji ?? '👤'}</span>}
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <div className="font-semibold leading-snug truncate"
+          style={{ fontSize: compact ? 12 : 13, color: 'var(--foreground)' }}>
+          {compact && (appt.patient?.photo_emoji ?? '👤') + ' '}{appt.patient?.name}
+        </div>
+        <div className="truncate mt-px" style={{ fontSize: 10, color: 'var(--muted)' }}>
+          {compact ? appt.doctor?.name : `${appt.doctor?.name}${appt.doctor?.specialty ? ' · ' + appt.doctor.specialty : ''}`}
+        </div>
+        {!compact && appt.patient?.convenio && (
+          <span className="inline-flex mt-1 font-medium px-1.5 py-px rounded border"
+            style={{ fontSize: 10, color: sc.color, borderColor: `${sc.color}60`, background: `${sc.color}10` }}>
+            {appt.patient.convenio}
+          </span>
+        )}
+      </div>
+
+      {/* Quick attend */}
+      {canAct ? (
+        <button
+          onClick={e => { e.stopPropagation(); onAttend(appt.id) }}
+          title="Marcar como atendida"
+          className="shrink-0 flex items-center justify-center rounded-full border-2 font-bold transition-all"
+          style={{
+            width: compact ? 28 : 32, height: compact ? 28 : 32,
+            fontSize: compact ? 11 : 13,
+            borderColor: '#14C38E', color: '#14C38E', background: 'transparent',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#14C38E'; e.currentTarget.style.color = '#fff' }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#14C38E' }}>
+          ✓
+        </button>
+      ) : appt.status === 'atendida' ? (
+        <span className="shrink-0 flex items-center justify-center rounded-full font-bold"
+          style={{
+            width: compact ? 28 : 32, height: compact ? 28 : 32,
+            fontSize: compact ? 11 : 13,
+            background: '#14C38E20', color: '#14C38E',
+          }}>✓</span>
+      ) : null}
     </div>
   )
 }
@@ -321,81 +366,66 @@ export default function AgendaBottomPanel() {
       {panelView === 'agenda' && <>
 
       {/* Header */}
-      <div className="flex items-center justify-between px-4 h-[44px] border-b shrink-0 gap-3"
-        style={{ borderColor: 'var(--border)' }}>
+      <div className="flex items-center gap-3 px-4 border-b shrink-0"
+        style={{ borderColor: 'var(--border)', minHeight: 52 }}>
         {/* Day nav */}
         <div className="flex items-center gap-1 shrink-0">
-          {/* Week back */}
           <button disabled={dayOffset <= 0} onClick={() => setDayOffset(d => Math.max(0, d - 7))}
             title="Semana anterior"
-            className="w-6 h-6 flex items-center justify-center rounded border text-[10px] font-bold disabled:opacity-20 transition-colors"
+            className="w-7 h-7 flex items-center justify-center rounded-lg border text-[11px] font-bold disabled:opacity-20 transition-colors"
             style={{ background: 'var(--card)', borderColor: 'var(--border)', color: 'var(--muted)' }}>«</button>
-          {/* Day back */}
           <button disabled={dayOffset <= -1} onClick={() => setDayOffset(d => d - 1)}
-            className="w-5 h-6 flex items-center justify-center rounded border text-xs disabled:opacity-30"
+            className="w-6 h-7 flex items-center justify-center rounded-lg border text-sm disabled:opacity-30"
             style={{ background: 'var(--card)', borderColor: 'var(--border)', color: 'var(--muted)' }}>‹</button>
 
-          <div className="font-display font-bold text-sm min-w-36 text-center leading-none select-none">
+          <div className="font-display font-bold text-[15px] px-2 text-center leading-tight select-none" style={{ minWidth: 140 }}>
             {getDayLabel(dayOffset)}
-            <span className="font-normal text-[10px] ml-1" style={{ color: 'var(--muted)' }}>
+            <div className="font-normal text-[11px] mt-px" style={{ color: 'var(--muted)' }}>
               {dayOffset > 1
-                ? new Date(Date.now() + dayOffset * 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-                  + ' · ' + getDayFull(dayOffset).split(',')[0]
+                ? getDayFull(dayOffset)
                 : getDayFull(dayOffset).replace(/^\w+,\s/, '')}
-            </span>
+            </div>
           </div>
 
-          {/* Day forward */}
           <button disabled={dayOffset >= 30} onClick={() => setDayOffset(d => d + 1)}
-            className="w-5 h-6 flex items-center justify-center rounded border text-xs disabled:opacity-30"
+            className="w-6 h-7 flex items-center justify-center rounded-lg border text-sm disabled:opacity-30"
             style={{ background: 'var(--card)', borderColor: 'var(--border)', color: 'var(--muted)' }}>›</button>
-          {/* Week forward */}
           <button disabled={dayOffset >= 30} onClick={() => setDayOffset(d => Math.min(30, d + 7))}
             title="Próxima semana"
-            className="w-6 h-6 flex items-center justify-center rounded border text-[10px] font-bold disabled:opacity-20 transition-colors"
+            className="w-7 h-7 flex items-center justify-center rounded-lg border text-[11px] font-bold disabled:opacity-20 transition-colors"
             style={{ background: 'var(--card)', borderColor: 'var(--border)', color: 'var(--muted)' }}>»</button>
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-1.5 overflow-x-auto">
+        <div className="flex items-center gap-1.5 overflow-x-auto flex-1" style={{ scrollbarWidth: 'none' }}>
           {([
             ['todos', 'Todos', counts.todos],
-            ['atendida', 'Atend.', counts.atendida],
-            ['confirmada', 'Confirm.', counts.confirmada],
-            ['pendente', 'Pend.', counts.pendente],
-            ['cancelada', 'Cancel.', counts.cancelada],
+            ['atendida', 'Atendida', counts.atendida],
+            ['confirmada', 'Confirmada', counts.confirmada],
+            ['pendente', 'Pendente', counts.pendente],
+            ['cancelada', 'Cancelada', counts.cancelada],
           ] as [string, string, number][]).map(([k, l, c]) => (
             <button key={k} onClick={() => setFilter(k)}
-              className="px-2 py-0.5 rounded-full text-[10px] font-medium border whitespace-nowrap"
+              className="px-3 py-1 rounded-full text-[11px] font-semibold border whitespace-nowrap transition-all"
               style={{
                 background: filter === k ? '#3B9EFF18' : 'var(--card)',
                 borderColor: filter === k ? 'var(--blue)' : 'var(--border)',
                 color: filter === k ? 'var(--blue)' : 'var(--muted)',
               }}>
-              {l}{k !== 'todos' ? ` ${c}` : ''}
+              {l}{k !== 'todos' && c > 0 ? ` · ${c}` : ''}
             </button>
           ))}
         </div>
 
         {/* Stats + view toggle */}
         <div className="flex items-center gap-2 shrink-0">
-          {counts.atendida > 0 && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border"
-              style={{ color: '#14C38E', borderColor: '#14C38E', background: '#14C38E18' }}>
-              ✓ {counts.atendida}
-            </span>
-          )}
-          {counts.pendente > 0 && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border"
-              style={{ color: '#F0A500', borderColor: '#F0A500', background: '#F0A50018' }}>
-              ◐ {counts.pendente}
-            </span>
-          )}
-          <span className="text-[10px]" style={{ color: 'var(--muted)' }}>{counts.todos} total</span>
+          <span className="text-[11px] font-medium" style={{ color: 'var(--muted)' }}>
+            {counts.atendida}/{counts.todos}
+          </span>
           <button
             onClick={() => setAgendaView(v => v === 'list' ? 'queue' : 'list')}
             title={agendaView === 'list' ? 'Ver fila de atendimento' : 'Ver lista'}
-            className="px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all"
+            className="px-3 py-1 rounded-full text-[11px] font-bold border transition-all"
             style={{
               color: agendaView === 'queue' ? '#14C38E' : 'var(--muted)',
               borderColor: agendaView === 'queue' ? '#14C38E' : 'var(--border)',
@@ -408,13 +438,13 @@ export default function AgendaBottomPanel() {
 
       {/* ── Doctor filter row ── */}
       {doctors.length > 0 && (
-        <div className="flex items-center gap-1.5 px-4 py-1.5 border-b overflow-x-auto shrink-0"
+        <div className="flex items-center gap-2 px-4 py-2 border-b overflow-x-auto shrink-0"
           style={{ borderColor: 'var(--border)', scrollbarWidth: 'none' }}>
-          <span className="text-[9px] font-bold uppercase tracking-[.08em] shrink-0 mr-0.5"
+          <span className="text-[10px] font-bold uppercase tracking-[.07em] shrink-0"
             style={{ color: 'var(--muted)' }}>Médico</span>
           <button
             onClick={() => setDoctorFilter(null)}
-            className="px-2.5 py-0.5 rounded-full text-[10px] font-medium border whitespace-nowrap shrink-0 transition-all"
+            className="px-3 py-1 rounded-full text-[11px] font-semibold border whitespace-nowrap shrink-0 transition-all"
             style={{
               background: !doctorFilter ? '#3B9EFF18' : 'var(--card)',
               borderColor: !doctorFilter ? 'var(--blue)' : 'var(--border)',
@@ -426,13 +456,13 @@ export default function AgendaBottomPanel() {
             <button
               key={doctor.id}
               onClick={() => setDoctorFilter(f => f === doctor.id ? null : doctor.id)}
-              className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-medium border whitespace-nowrap shrink-0 transition-all"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold border whitespace-nowrap shrink-0 transition-all"
               style={{
                 background: doctorFilter === doctor.id ? `${color}18` : 'var(--card)',
                 borderColor: doctorFilter === doctor.id ? color : 'var(--border)',
                 color: doctorFilter === doctor.id ? color : 'var(--muted)',
               }}>
-              <span className="w-[6px] h-[6px] rounded-full shrink-0" style={{ background: color }} />
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
               {doctor.name}
             </button>
           ))}
@@ -456,31 +486,43 @@ export default function AgendaBottomPanel() {
       {/* Body — list view */}
       {agendaView === 'list' && (
       <div className="flex flex-1 min-h-0">
-        {/* List */}
-        <div className="w-[54%] overflow-y-auto border-r" style={{ borderColor: 'var(--border)' }}>
+        {/* List — full width when nothing selected, 44% when detail open */}
+        <div
+          className="overflow-y-auto"
+          style={{
+            width: selAppt ? '44%' : '100%',
+            transition: 'width 0.2s ease',
+            borderRight: selAppt ? '1px solid var(--border)' : 'none',
+            flexShrink: 0,
+          }}>
           {loading && (
-            <div className="flex items-center justify-center h-16 gap-2 text-xs" style={{ color: 'var(--muted)' }}>
-              <span className="w-3 h-3 border-2 rounded-full animate-spin"
+            <div className="flex items-center justify-center h-20 gap-2 text-sm" style={{ color: 'var(--muted)' }}>
+              <span className="w-4 h-4 border-2 rounded-full animate-spin"
                 style={{ borderColor: 'var(--green)', borderTopColor: 'transparent' }} />
-              Carregando…
+              Carregando agenda…
             </div>
           )}
-          {error && <div className="p-3 text-xs text-center" style={{ color: 'var(--red)' }}>Erro: {error}</div>}
+          {error && <div className="p-4 text-sm text-center" style={{ color: 'var(--red)' }}>Erro: {error}</div>}
           {!loading && filtered.length === 0 && (
-            <div className="flex items-center justify-center h-16 text-xs italic" style={{ color: 'var(--muted)' }}>
+            <div className="flex flex-col items-center justify-center gap-2 py-12 text-sm" style={{ color: 'var(--muted)' }}>
+              <span style={{ fontSize: 28, opacity: .2 }}>📋</span>
               Nenhuma consulta para {getDayLabel(dayOffset).toLowerCase()}.
             </div>
           )}
           {!loading && filtered.map(a => (
             <ApptRow key={a.id} appt={a} selected={selId === a.id}
-              onSelect={() => setSelId(prev => prev === a.id ? null : a.id)} />
+              compact={!!selAppt}
+              onSelect={() => setSelId(prev => prev === a.id ? null : a.id)}
+              onAttend={handleAttend} />
           ))}
         </div>
 
-        {/* Detail */}
-        <div className="flex-1 overflow-y-auto" style={{ background: 'var(--panel)' }}>
-          <ApptDetail appt={selAppt} onAttend={handleAttend} onCancel={handleCancel} detailRef={detailRef} />
-        </div>
+        {/* Detail — only when selected */}
+        {selAppt && (
+          <div className="flex-1 overflow-y-auto" style={{ background: 'var(--panel)' }}>
+            <ApptDetail appt={selAppt} onAttend={handleAttend} onCancel={handleCancel} detailRef={detailRef} />
+          </div>
+        )}
       </div>
       )}
 
