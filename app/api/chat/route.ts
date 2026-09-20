@@ -249,6 +249,57 @@ async function consultarDisponibilidade(
   }
 }
 
+async function escalarParaRecepcao(
+  db: SupabaseClient,
+  input: {
+    request_type: 'cancelamento' | 'atendente' | 'alteracao_horario'
+    patient_name?: string
+    notes?: string
+    appointment_id?: string
+  },
+  sessionId: string | undefined
+): Promise<string> {
+  try {
+    let patientId: string | null = null
+    let patientName = input.patient_name ?? 'Paciente'
+
+    if (sessionId) {
+      const { data: sess } = await db.from('wa_sessions').select('patient_id, phone').eq('id', sessionId).single()
+      if (sess?.patient_id) {
+        patientId = sess.patient_id
+        const { data: p } = await db.from('patients').select('name').eq('id', patientId).single()
+        if (p?.name) patientName = p.name
+      }
+    }
+
+    const typeLabels: Record<string, string> = {
+      cancelamento:      'Cancelamento de consulta',
+      atendente:         'Solicitação de atendimento humano',
+      alteracao_horario: 'Alteração de horário',
+    }
+
+    const { data: req, error } = await db.from('approval_requests').insert({
+      session_id: sessionId ?? null,
+      patient_id: patientId,
+      patient_name: patientName,
+      request_type: input.request_type,
+      status: 'pending',
+      message_to_receptionist: input.notes ?? typeLabels[input.request_type],
+      details: input.appointment_id ? { appointment_id: input.appointment_id } : null,
+    }).select('id').single()
+
+    if (error) return `Erro ao criar solicitação: ${error.message}`
+
+    return JSON.stringify({
+      ok: true,
+      request_id: req?.id,
+      message: `Solicitação de ${typeLabels[input.request_type]} criada. A recepção será notificada e entrará em contato com ${patientName}.`,
+    })
+  } catch (err) {
+    return `Erro interno: ${err instanceof Error ? err.message : 'desconhecido'}`
+  }
+}
+
 async function consultarAgendamentos(
   db: SupabaseClient,
   sessionId: string | undefined,
@@ -442,6 +493,19 @@ Depois de chamar a ferramenta com sucesso:
 - Se status = "agendada" → confirme o agendamento com data, hora e médico
 - Se status = "lista_espera" → confirme que entrou na fila de espera e que será avisado se o horário abrir
 
+ESCALAÇÃO PARA RECEPÇÃO (obrigatório usar escalar_para_recepcao):
+Chame escalar_para_recepcao quando o paciente pedir:
+- Cancelar uma consulta → request_type: "cancelamento"
+- Falar com atendente/recepcionista/pessoa → request_type: "atendente"
+- Alterar/remarcar horário de consulta existente → request_type: "alteracao_horario"
+
+Após chamar escalar_para_recepcao com sucesso:
+- Para cancelamento: "Sua solicitação de cancelamento foi registrada. Nossa equipe entrará em contato em breve para confirmar. ✅"
+- Para atendente: "Registrei sua solicitação. Um atendente da Clínica São Lucas entrará em contato com você em breve. 📞"
+- Para alteração de horário: "Sua solicitação de remarcação foi registrada. Nossa equipe verificará a disponibilidade e confirmará o novo horário em breve. 🗓"
+
+NUNCA diga "Vou encaminhar para a recepção" sem antes chamar a ferramenta escalar_para_recepcao.
+
 Contexto regulatório: LGPD Art.11 (dados de saúde = dados sensíveis), CFM 2.314/2022 (sigilo médico), WhatsApp Business API (somente templates HSM fora da janela de 24h).`
 // Note: SYSTEM_PROMPT_BASE is combined with dynamic clinic config at request time via buildSystemPrompt()
 
@@ -552,6 +616,24 @@ export async function POST(req: NextRequest) {
           required: ['symptoms'],
         },
       },
+      {
+        name: 'escalar_para_recepcao',
+        description: 'Encaminha uma solicitação para a recepção quando o paciente pede: cancelamento de consulta, falar com atendente humano, ou alteração de horário. Cria um registro no painel de Aprovações para a equipe tratar.',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            request_type: {
+              type: 'string',
+              enum: ['cancelamento', 'atendente', 'alteracao_horario'],
+              description: 'Tipo da solicitação: cancelamento = cancelar consulta; atendente = falar com pessoa; alteracao_horario = remarcar',
+            },
+            patient_name: { type: 'string', description: 'Nome do paciente se conhecido' },
+            notes:         { type: 'string', description: 'Observações adicionais do paciente sobre a solicitação' },
+            appointment_id: { type: 'string', description: 'ID do agendamento relacionado, se aplicável' },
+          },
+          required: ['request_type'],
+        },
+      },
     ]
 
     const historyParams: Anthropic.MessageParam[] = (history ?? []).map(
@@ -627,6 +709,12 @@ export async function POST(req: NextRequest) {
             content = await consultarDisponibilidade(db, { specialty, preferred_date })
           } else if (t.name === 'verificar_urgencia') {
             content = JSON.stringify({ urgencia: true, encaminhar: 'pronto-socorro' })
+          } else if (t.name === 'escalar_para_recepcao') {
+            content = await escalarParaRecepcao(
+              db,
+              t.input as { request_type: 'cancelamento' | 'atendente' | 'alteracao_horario'; patient_name?: string; notes?: string; appointment_id?: string },
+              sessionId
+            )
           }
           toolCallCount++
           trace?.span({

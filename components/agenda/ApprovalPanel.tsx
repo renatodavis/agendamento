@@ -7,14 +7,61 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
+type RequestType = 'disponibilidade' | 'cancelamento' | 'atendente' | 'alteracao_horario'
+
 type ApprovalRequest = {
   id: string
+  request_type: RequestType
   patient_name: string | null
-  suggested_at: string
-  message_to_patient: string
+  suggested_at: string | null
+  message_to_patient: string | null
+  message_to_receptionist: string | null
+  details: Record<string, unknown> | null
   status: string
   created_at: string
   doctor: { name: string; specialty: string } | null
+}
+
+const TYPE_CONFIG: Record<RequestType, {
+  label: string
+  icon: string
+  color: string
+  bg: string
+  border: string
+  emptyAction: string
+}> = {
+  disponibilidade: {
+    label: 'Sugestão de horário',
+    icon: '📅',
+    color: '#F0A500',
+    bg: '#F0A50018',
+    border: '#F0A500',
+    emptyAction: '',
+  },
+  cancelamento: {
+    label: 'Cancelamento',
+    icon: '🚫',
+    color: '#EF4444',
+    bg: '#EF444412',
+    border: '#EF4444',
+    emptyAction: '',
+  },
+  atendente: {
+    label: 'Falar com atendente',
+    icon: '📞',
+    color: '#3B82F6',
+    bg: '#3B82F612',
+    border: '#3B82F6',
+    emptyAction: '',
+  },
+  alteracao_horario: {
+    label: 'Alteração de horário',
+    icon: '🗓',
+    color: '#8B5CF6',
+    bg: '#8B5CF612',
+    border: '#8B5CF6',
+    emptyAction: '',
+  },
 }
 
 function fmtSlot(iso: string) {
@@ -47,18 +94,19 @@ export default function ApprovalPanel() {
     setRequests(
       (data ?? []).map(r => ({
         ...r,
+        request_type: (r.request_type ?? 'disponibilidade') as RequestType,
         doctor: r.doctor as unknown as { name: string; specialty: string } | null,
       }))
     )
   }
 
-  async function act(id: string, action: 'approve' | 'reject') {
+  async function act(id: string, action: string, body?: Record<string, unknown>) {
     setBusy(p => ({ ...p, [id]: true }))
     try {
       await fetch('/api/approval', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, action }),
+        body: JSON.stringify({ id, action, ...body }),
       })
       setRequests(prev => prev.filter(r => r.id !== id))
     } finally {
@@ -72,8 +120,7 @@ export default function ApprovalPanel() {
         <span className="text-3xl opacity-20">✅</span>
         <p className="text-xs leading-relaxed" style={{ color: 'var(--muted)' }}>
           Nenhuma aprovação pendente.<br />
-          Quando o bot encontrar uma vaga,<br />
-          ela aparece aqui para você confirmar.
+          Solicitações do bot aparecem aqui.
         </p>
       </div>
     )
@@ -83,58 +130,115 @@ export default function ApprovalPanel() {
     <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-2"
       style={{ scrollbarWidth: 'thin', scrollbarColor: 'var(--border) transparent' }}>
       {requests.map(req => {
-        const { date, time } = fmtSlot(req.suggested_at)
+        const cfg = TYPE_CONFIG[req.request_type] ?? TYPE_CONFIG.disponibilidade
         const isLoading = busy[req.id]
+
         return (
           <div key={req.id} className="rounded-lg border flex flex-col gap-2 overflow-hidden"
-            style={{ background: 'var(--card)', borderColor: '#F0A500' }}>
+            style={{ background: 'var(--card)', borderColor: cfg.border }}>
 
-            {/* Orange top bar */}
+            {/* Colored top bar */}
             <div className="px-3 pt-2.5 pb-0 flex items-center justify-between gap-2">
               <div>
                 <div className="text-[12px] font-bold leading-tight">{req.patient_name ?? 'Paciente'}</div>
-                <div className="text-[10px]" style={{ color: 'var(--muted)' }}>
-                  {req.doctor?.name} · {req.doctor?.specialty}
-                </div>
+                {req.doctor && (
+                  <div className="text-[10px]" style={{ color: 'var(--muted)' }}>
+                    {req.doctor.name} · {req.doctor.specialty}
+                  </div>
+                )}
               </div>
               <span className="text-[8px] px-1.5 py-0.5 rounded-full font-bold border shrink-0"
-                style={{ color: '#F0A500', borderColor: '#F0A500', background: '#F0A50018' }}>
-                ◐ aguarda revisão
+                style={{ color: cfg.color, borderColor: cfg.border, background: cfg.bg }}>
+                {cfg.icon} {cfg.label}
               </span>
             </div>
 
-            {/* Slot */}
-            <div className="mx-3 px-2.5 py-2 rounded-md flex items-center gap-2"
-              style={{ background: 'var(--panel)' }}>
-              <span className="text-base">📅</span>
-              <div>
-                <div className="text-[11px] font-semibold">{date} às {time}</div>
-                <div className="text-[9px]" style={{ color: 'var(--muted)' }}>horário sugerido pelo sistema</div>
+            {/* Slot — only for disponibilidade */}
+            {req.request_type === 'disponibilidade' && req.suggested_at && (() => {
+              const { date, time } = fmtSlot(req.suggested_at)
+              return (
+                <div className="mx-3 px-2.5 py-2 rounded-md flex items-center gap-2"
+                  style={{ background: 'var(--panel)' }}>
+                  <span className="text-base">📅</span>
+                  <div>
+                    <div className="text-[11px] font-semibold">{date} às {time}</div>
+                    <div className="text-[9px]" style={{ color: 'var(--muted)' }}>horário sugerido pelo sistema</div>
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* Notes / message to receptionist */}
+            {req.request_type !== 'disponibilidade' && req.message_to_receptionist && (
+              <div className="mx-3 px-2.5 py-2 rounded-md text-[10px]" style={{ background: 'var(--panel)', color: 'var(--foreground)' }}>
+                {req.message_to_receptionist}
               </div>
-            </div>
+            )}
 
-            {/* Message preview */}
-            <details className="px-3 text-[9px]" style={{ color: 'var(--muted)' }}>
-              <summary className="cursor-pointer select-none mb-1">
-                Ver mensagem que será enviada ao paciente
-              </summary>
-              <pre className="whitespace-pre-wrap leading-relaxed bg-transparent">{req.message_to_patient}</pre>
-            </details>
+            {/* Message preview — only for disponibilidade */}
+            {req.request_type === 'disponibilidade' && req.message_to_patient && (
+              <details className="px-3 text-[9px]" style={{ color: 'var(--muted)' }}>
+                <summary className="cursor-pointer select-none mb-1">
+                  Ver mensagem que será enviada ao paciente
+                </summary>
+                <pre className="whitespace-pre-wrap leading-relaxed bg-transparent">{req.message_to_patient}</pre>
+              </details>
+            )}
 
-            {/* Actions */}
+            {/* Actions — vary by type */}
             <div className="flex gap-1.5 px-3 pb-2.5">
-              <button disabled={isLoading} onClick={() => act(req.id, 'approve')}
-                className="flex-1 py-1.5 text-[11px] font-semibold rounded-md border transition-all disabled:opacity-40"
-                style={{ color: '#14C38E', borderColor: '#14C38E', background: '#14C38E12' }}
-                onMouseEnter={e => { if (!isLoading) e.currentTarget.style.background = 'var(--green)'; e.currentTarget.style.color = '#fff' }}
-                onMouseLeave={e => { e.currentTarget.style.background = '#14C38E12'; e.currentTarget.style.color = '#14C38E' }}>
-                {isLoading ? '…' : '✓ Aprovar e Notificar'}
-              </button>
-              <button disabled={isLoading} onClick={() => act(req.id, 'reject')}
-                className="flex-1 py-1.5 text-[11px] font-semibold rounded-md border transition-all disabled:opacity-40"
-                style={{ color: 'var(--red)', borderColor: 'var(--red)', background: '#EF444412' }}>
-                {isLoading ? '…' : '✗ Rejeitar'}
-              </button>
+              {req.request_type === 'disponibilidade' && (
+                <>
+                  <button disabled={isLoading} onClick={() => act(req.id, 'approve')}
+                    className="flex-1 py-1.5 text-[11px] font-semibold rounded-md border transition-all disabled:opacity-40"
+                    style={{ color: '#14C38E', borderColor: '#14C38E', background: '#14C38E12' }}>
+                    {isLoading ? '…' : '✓ Aprovar e Notificar'}
+                  </button>
+                  <button disabled={isLoading} onClick={() => act(req.id, 'reject')}
+                    className="flex-1 py-1.5 text-[11px] font-semibold rounded-md border transition-all disabled:opacity-40"
+                    style={{ color: 'var(--red)', borderColor: 'var(--red)', background: '#EF444412' }}>
+                    {isLoading ? '…' : '✗ Rejeitar'}
+                  </button>
+                </>
+              )}
+
+              {req.request_type === 'cancelamento' && (
+                <>
+                  <button disabled={isLoading} onClick={() => act(req.id, 'confirm_cancel')}
+                    className="flex-1 py-1.5 text-[11px] font-semibold rounded-md border transition-all disabled:opacity-40"
+                    style={{ color: '#EF4444', borderColor: '#EF4444', background: '#EF444412' }}>
+                    {isLoading ? '…' : '🚫 Confirmar Cancelamento'}
+                  </button>
+                  <button disabled={isLoading} onClick={() => act(req.id, 'keep_appointment')}
+                    className="flex-1 py-1.5 text-[11px] font-semibold rounded-md border transition-all disabled:opacity-40"
+                    style={{ color: '#14C38E', borderColor: '#14C38E', background: '#14C38E12' }}>
+                    {isLoading ? '…' : '✓ Manter Consulta'}
+                  </button>
+                </>
+              )}
+
+              {req.request_type === 'atendente' && (
+                <button disabled={isLoading} onClick={() => act(req.id, 'resolve')}
+                  className="flex-1 py-1.5 text-[11px] font-semibold rounded-md border transition-all disabled:opacity-40"
+                  style={{ color: '#3B82F6', borderColor: '#3B82F6', background: '#3B82F612' }}>
+                  {isLoading ? '…' : '✓ Marcar como Atendido'}
+                </button>
+              )}
+
+              {req.request_type === 'alteracao_horario' && (
+                <>
+                  <button disabled={isLoading} onClick={() => act(req.id, 'resolve')}
+                    className="flex-1 py-1.5 text-[11px] font-semibold rounded-md border transition-all disabled:opacity-40"
+                    style={{ color: '#8B5CF6', borderColor: '#8B5CF6', background: '#8B5CF612' }}>
+                    {isLoading ? '…' : '🗓 Reagendar'}
+                  </button>
+                  <button disabled={isLoading} onClick={() => act(req.id, 'keep_appointment')}
+                    className="flex-1 py-1.5 text-[11px] font-semibold rounded-md border transition-all disabled:opacity-40"
+                    style={{ color: 'var(--muted)', borderColor: 'var(--border)', background: 'var(--panel)' }}>
+                    {isLoading ? '…' : 'Manter Horário'}
+                  </button>
+                </>
+              )}
             </div>
 
             <div className="px-3 pb-2 text-[8px]" style={{ color: 'var(--muted)' }}>
