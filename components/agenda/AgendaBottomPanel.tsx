@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useAppointments } from '@/lib/useAppointments'
 import type { Appointment, AppointmentStatus, Doctor } from '@/types'
+import ApprovalPanel, { useApprovalCount } from './ApprovalPanel'
 
 const DOCTOR_COLORS = ['#3B9EFF', '#14C38E', '#F0A500', '#A78BFA', '#FB923C', '#F472B6', '#22D3EE', '#EF4444']
 
@@ -197,11 +198,13 @@ function ApptDetail({ appt, onAttend, onCancel, detailRef }: {
 
 // ── Main ──────────────────────────────────────────────────────────────
 export default function AgendaBottomPanel() {
+  const [panelView, setPanelView]       = useState<'agenda' | 'approvals'>('agenda')
   const [dayOffset, setDayOffset]       = useState(0)
   const [selId, setSelId]               = useState<string | null>(null)
   const [filter, setFilter]             = useState('todos')
   const [doctorFilter, setDoctorFilter] = useState<string | null>(null)
   const detailRef                       = useRef<HTMLDivElement>(null)
+  const approvalCount                   = useApprovalCount()
 
   const { appointments, loading, error, updateStatus } = useAppointments(dayOffset)
   const selAppt = appointments.find(a => a.id === selId) ?? null
@@ -263,6 +266,42 @@ export default function AgendaBottomPanel() {
     <div className="flex flex-col flex-1 min-h-0" style={{
       background: 'var(--panel)',
     }}>
+      {/* ── Tab switcher ── */}
+      <div className="flex border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
+        <button onClick={() => setPanelView('agenda')}
+          className="flex-1 py-1.5 text-[11px] font-semibold border-b-2 transition-colors"
+          style={{
+            borderColor: panelView === 'agenda' ? 'var(--blue)' : 'transparent',
+            color: panelView === 'agenda' ? 'var(--blue)' : 'var(--muted)',
+          }}>
+          📅 Agenda
+        </button>
+        <button onClick={() => setPanelView('approvals')}
+          className="flex-1 py-1.5 text-[11px] font-semibold border-b-2 transition-colors relative"
+          style={{
+            borderColor: panelView === 'approvals' ? '#F0A500' : 'transparent',
+            color: panelView === 'approvals' ? '#F0A500' : 'var(--muted)',
+          }}>
+          ✅ Aprovações
+          {approvalCount > 0 && (
+            <span className="absolute -top-0.5 right-3 w-4 h-4 rounded-full text-[9px] font-bold text-white flex items-center justify-center"
+              style={{ background: '#F0A500' }}>
+              {approvalCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* ── Approval panel ── */}
+      {panelView === 'approvals' && (
+        <div className="flex-1 min-h-0 flex flex-col">
+          <ApprovalPanel />
+        </div>
+      )}
+
+      {/* ── Agenda panel ── */}
+      {panelView === 'agenda' && <>
+
       {/* Header */}
       <div className="flex items-center justify-between px-4 h-[44px] border-b shrink-0 gap-3"
         style={{ borderColor: 'var(--border)' }}>
@@ -399,6 +438,8 @@ export default function AgendaBottomPanel() {
           <ApptDetail appt={selAppt} onAttend={handleAttend} onCancel={handleCancel} detailRef={detailRef} />
         </div>
       </div>
+
+      </>} {/* end agenda panel */}
     </div>
   )
 }

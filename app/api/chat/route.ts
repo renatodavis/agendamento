@@ -144,6 +144,122 @@ async function executarAgendamento(
   }
 }
 
+async function consultarDisponibilidade(
+  db: SupabaseClient,
+  input: { specialty: string; preferred_date?: string; patient_name?: string },
+  sessionId: string | undefined
+): Promise<string> {
+  try {
+    const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+    const { data: allDoctors } = await db.from('doctors').select('id, name, specialty')
+    const doctor = (allDoctors ?? []).find(d => {
+      const ds = norm(d.specialty); const ss = norm(input.specialty)
+      return ds.includes(ss.slice(0, 5)) || ss.includes(ds.slice(0, 5))
+    })
+    if (!doctor) {
+      return `Especialidade "${input.specialty}" não encontrada. Disponíveis: ${(allDoctors ?? []).map(d => d.specialty).join(', ')}`
+    }
+
+    const { data: schedules } = await db
+      .from('doctor_schedules')
+      .select('day_of_week, start_time, end_time, slot_minutes')
+      .eq('doctor_id', doctor.id)
+
+    if (!schedules?.length) {
+      return `${doctor.name} ainda não tem horários configurados. Nossa recepção entrará em contato para agendar.`
+    }
+
+    const schedMap = new Map(schedules.map(s => [s.day_of_week as number, s]))
+
+    // Look from tomorrow or from preferred_date, up to 21 days
+    const tomorrow = new Date(); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1); tomorrow.setUTCHours(0, 0, 0, 0)
+    const prefDate = input.preferred_date ? new Date(input.preferred_date + 'T00:00:00Z') : tomorrow
+    const startDate = prefDate > tomorrow ? prefDate : tomorrow
+    const endDate = new Date(startDate); endDate.setUTCDate(endDate.getUTCDate() + 21)
+
+    const { data: existingAppts } = await db
+      .from('appointments')
+      .select('scheduled_at')
+      .eq('doctor_id', doctor.id)
+      .gte('scheduled_at', startDate.toISOString())
+      .lte('scheduled_at', endDate.toISOString())
+      .not('status', 'in', '("cancelada","lista_espera")')
+
+    const availableSlots: Date[] = []
+    const cur = new Date(startDate)
+    while (availableSlots.length < 3 && cur <= endDate) {
+      const sched = schedMap.get(cur.getUTCDay())
+      if (sched) {
+        const [sh, sm] = (sched.start_time as string).split(':').map(Number)
+        const [eh] = (sched.end_time as string).split(':').map(Number)
+        const slotMin = (sched.slot_minutes as number) ?? 60
+        const slot = new Date(cur); slot.setUTCHours(sh, sm, 0, 0)
+        while (slot.getUTCHours() < eh && availableSlots.length < 3) {
+          const slotDay = slot.toISOString().split('T')[0]
+          const slotHour = slot.getUTCHours()
+          const isBooked = (existingAppts ?? []).some(a => {
+            const ap = new Date(a.scheduled_at)
+            return ap.toISOString().split('T')[0] === slotDay && ap.getUTCHours() === slotHour
+          })
+          if (!isBooked) availableSlots.push(new Date(slot))
+          slot.setUTCMinutes(slot.getUTCMinutes() + slotMin)
+        }
+      }
+      cur.setUTCDate(cur.getUTCDate() + 1)
+    }
+
+    if (!availableSlots.length) {
+      return `Sem disponibilidade para ${doctor.name} nos próximos 21 dias. Tente outra especialidade ou data futura.`
+    }
+
+    // Get patient ID from session
+    let patientId: string | null = null
+    if (sessionId) {
+      const { data: sess } = await db.from('wa_sessions').select('patient_id').eq('id', sessionId).single()
+      patientId = sess?.patient_id ?? null
+    }
+
+    const best = availableSlots[0]
+    const fmtDate = (d: Date) => d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' })
+    const fmtTime = (d: Date) => d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
+
+    const messageToPatient =
+      `Olá! Verificamos a agenda e encontramos uma disponibilidade com *${doctor.name}* (${doctor.specialty}):\n\n` +
+      `📅 *${fmtDate(best)}* às *${fmtTime(best)}*\n\n` +
+      `Deseja confirmar este horário?\nResponda *SIM* para confirmar ou *NÃO* para ver outras opções.`
+
+    const { data: approvalReq } = await db
+      .from('approval_requests')
+      .insert({
+        session_id: sessionId ?? null,
+        patient_id: patientId,
+        patient_name: input.patient_name ?? 'Paciente',
+        doctor_id: doctor.id,
+        suggested_at: best.toISOString(),
+        message_to_patient: messageToPatient,
+        status: 'pending',
+      })
+      .select('id')
+      .single()
+
+    const altSlots = availableSlots.slice(1).map(s =>
+      `• ${s.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', timeZone: 'UTC' })} às ${fmtTime(s)}`
+    )
+
+    return JSON.stringify({
+      pending_approval: true,
+      approval_id: approvalReq?.id,
+      doctor_name: doctor.name,
+      specialty: doctor.specialty,
+      suggested_at: best.toISOString(),
+      alternative_slots: availableSlots.slice(1).map(s => s.toISOString()),
+      info: `Solicitação criada (aguarda aprovação da recepção). Horário sugerido: ${fmtDate(best)} às ${fmtTime(best)} com ${doctor.name}. Alternativas: ${altSlots.join(', ')}`,
+    })
+  } catch (err) {
+    return `Erro ao consultar disponibilidade: ${err instanceof Error ? err.message : 'desconhecido'}`
+  }
+}
+
 async function consultarAgendamentos(
   db: SupabaseClient,
   sessionId: string | undefined,
@@ -235,6 +351,18 @@ Confirma? Responda *SIM* para confirmar ou *NÃO* para cancelar."
 Se o paciente disser SIM após esse resumo → chame agendar_consulta IMEDIATAMENTE.
 Se o paciente responder SIM a uma mensagem anterior da clínica sobre remarcar → inicie o fluxo de agendamento perguntando a especialidade e data desejada.
 
+VERIFICAÇÃO DE AGENDA EXISTENTE (obrigatório):
+- SEMPRE que o paciente perguntar sobre consultas, agenda, horários ou quiser agendar → chame consultar_agendamentos PRIMEIRO
+- Se já tiver consulta marcada → informe e pergunte se deseja fazer outra ou confirmar a existente
+
+FLUXO DE DISPONIBILIDADE COM APROVAÇÃO HUMANA (HITL):
+- Quando o paciente não souber a data, pedir sugestão, ou perguntar "quando tem vaga" → use consultar_disponibilidade
+- A ferramenta encontra o próximo horário livre e cria uma solicitação para a recepção aprovar ANTES de enviar ao paciente
+- Após chamar consultar_disponibilidade com sucesso (pending_approval: true), diga EXATAMENTE:
+  "Verificamos a agenda de [médico]! Nossa equipe está confirmando a disponibilidade e em breve você receberá uma confirmação por aqui. 📋"
+- NÃO mencione a data específica ao paciente — aguarde a recepção aprovar
+- Se o paciente já souber a data/hora exata que quer → use o fluxo normal de confirmação SIM/NÃO e depois agendar_consulta
+
 CONFLITO DE HORÁRIO:
 Se a ferramenta retornar um JSON com "conflict: true", apresente a mensagem do campo "message" ao paciente exatamente como está.
 - Se o paciente responder *FILA* → chame agendar_consulta novamente com lista_espera: true para o mesmo horário
@@ -325,6 +453,19 @@ export async function POST(req: NextRequest) {
         },
       },
       {
+        name: 'consultar_disponibilidade',
+        description: 'Busca o próximo horário disponível de um médico consultando a agenda real e cria uma solicitação de aprovação para a recepção confirmar ANTES de enviar a data ao paciente. Usar quando o paciente pedir sugestão de data, não souber quando quer, ou pedir "quando tem vaga".',
+        input_schema: {
+          type: 'object' as const,
+          properties: {
+            specialty:      { type: 'string', description: 'Especialidade médica desejada' },
+            preferred_date: { type: 'string', description: 'Data mínima preferida YYYY-MM-DD (opcional — se omitido, busca a partir de amanhã)' },
+            patient_name:   { type: 'string', description: 'Nome completo do paciente' },
+          },
+          required: ['specialty'],
+        },
+      },
+      {
         name: 'verificar_urgencia',
         description: 'Verifica se os sintomas indicam urgência médica',
         input_schema: {
@@ -405,6 +546,9 @@ export async function POST(req: NextRequest) {
           } else if (t.name === 'consultar_agendamentos') {
             const { status_filter } = t.input as { status_filter?: string }
             content = await consultarAgendamentos(db, sessionId, status_filter)
+          } else if (t.name === 'consultar_disponibilidade') {
+            const { specialty, preferred_date, patient_name } = t.input as { specialty: string; preferred_date?: string; patient_name?: string }
+            content = await consultarDisponibilidade(db, { specialty, preferred_date, patient_name }, sessionId)
           } else if (t.name === 'verificar_urgencia') {
             content = JSON.stringify({ urgencia: true, encaminhar: 'pronto-socorro' })
           }
