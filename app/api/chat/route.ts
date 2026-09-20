@@ -84,10 +84,16 @@ async function executarAgendamento(
 
     if (!patientId) return 'Não foi possível identificar o paciente. Informe o nome completo.'
 
-    // 3. Parse date — default to today if not provided, time to 14:00
-    const { lista_espera } = input
+    // 3. Parse date and time — use preferred_time if provided, else 08:00
+    const { lista_espera, preferred_time } = input
     const datePart = preferred_date ?? new Date().toISOString().split('T')[0]
-    const scheduled_at = new Date(`${datePart}T14:00:00`)
+    // Normalize time: accept "9h", "9:00", "09:00", "9h00" → "HH:MM"
+    const rawTime = preferred_time?.trim() ?? ''
+    const timeMatch = rawTime.match(/(\d{1,2})[h:](\d{0,2})/)
+    const timePart = timeMatch
+      ? `${String(Number(timeMatch[1])).padStart(2, '0')}:${(timeMatch[2] || '00').padStart(2, '0')}`
+      : '08:00'
+    const scheduled_at = new Date(`${datePart}T${timePart}:00`)
     if (isNaN(scheduled_at.getTime())) return `Data inválida: ${preferred_date}`
 
     // 4. Check for scheduling conflict (same doctor, same hour slot, active status)
@@ -408,11 +414,11 @@ Exemplo de confirmação antes de agendar:
 "Perfeito! Vou agendar:
 • Paciente: [nome]
 • Especialidade: [especialidade]
-• Data: [data]
+• Data: [data] às [horário]
 
 Confirma? Responda *SIM* para confirmar ou *NÃO* para cancelar."
 
-Se o paciente disser SIM após esse resumo → chame agendar_consulta IMEDIATAMENTE.
+Se o paciente disser SIM após esse resumo → chame agendar_consulta IMEDIATAMENTE com preferred_time preenchido exatamente como o paciente disse ou como apareceu no formatted_slots.
 Se o paciente responder SIM a uma mensagem anterior da clínica sobre remarcar → inicie o fluxo de agendamento perguntando a especialidade e data desejada.
 
 VERIFICAÇÃO DE AGENDA EXISTENTE (obrigatório):
@@ -501,6 +507,7 @@ export async function POST(req: NextRequest) {
           properties: {
             specialty: { type: 'string', description: 'Especialidade médica (ex: Clínico Geral, Cardiologia)' },
             preferred_date: { type: 'string', description: 'Data confirmada pelo paciente no formato YYYY-MM-DD' },
+            preferred_time: { type: 'string', description: 'Horário desejado pelo paciente, ex: "09:00", "9h", "14h30". Obrigatório quando o paciente especificar um horário.' },
             patient_name: { type: 'string', description: 'Nome completo do paciente' },
             lista_espera: { type: 'boolean', description: 'true = entrar na fila de espera mesmo que o horário esteja ocupado' },
           },
