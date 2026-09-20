@@ -59,8 +59,12 @@ export async function POST(req: NextRequest) {
     }
 
     // Get patient phone: prefer wa_session phone (matches WhatsApp), fallback to patients.phone
-    const patientId = (appt.patient as { id: string; name: string; phone: string | null } | null)?.id
-    let phone: string | null = (appt.patient as { phone: string | null } | null)?.phone ?? null
+    type Patient = { id: string; name: string; phone: string | null }
+    type Doctor  = { name: string; specialty: string }
+    const patient  = appt.patient as unknown as Patient | null
+    const doctor   = appt.doctor  as unknown as Doctor  | null
+    const patientId = patient?.id
+    let phone: string | null = patient?.phone ?? null
 
     if (patientId) {
       const { data: session } = await db
@@ -76,9 +80,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, reason: 'Paciente sem telefone cadastrado no WhatsApp' })
     }
 
-    const patientName = (appt.patient as { name: string } | null)?.name ?? 'Paciente'
-    const doctorName  = (appt.doctor as { name: string } | null)?.name ?? 'Médico'
-    const specialty   = (appt.doctor as { specialty: string } | null)?.specialty ?? ''
+    const patientName = patient?.name ?? 'Paciente'
+    const doctorName  = doctor?.name  ?? 'Médico'
+    const specialty   = doctor?.specialty ?? ''
     const dateStr     = formatDate(appt.scheduled_at)
 
     let message = ''

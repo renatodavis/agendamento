@@ -191,7 +191,7 @@ async function consultarAgendamentos(
       const d = new Date(a.scheduled_at)
       const dateStr = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })
       const timeStr = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
-      const doctor = (a.doctor as { name: string; specialty: string } | null)
+      const doctor = (a.doctor as unknown as { name: string; specialty: string } | null)
       const cancelNote = a.cancel_reason ? ` (motivo: ${a.cancel_reason})` : ''
       return `• ${dateStr} às ${timeStr} — ${doctor?.specialty ?? ''} (${doctor?.name ?? ''}) — status: ${a.status}${cancelNote}`
     })
