@@ -163,8 +163,47 @@ export default function AppLayout() {
         ))}
       </nav>
 
+      {/* ── Floating WhatsApp button ── */}
+      <a
+        href="https://wa.me/554497734024"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Falar pelo WhatsApp"
+        className="wa-fab"
+        style={{
+          position: 'fixed',
+          bottom: 24,
+          right: 24,
+          width: 56,
+          height: 56,
+          borderRadius: '50%',
+          background: '#25D366',
+          boxShadow: '0 4px 16px rgba(37,211,102,.45)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          textDecoration: 'none',
+          transition: 'transform .15s, box-shadow .15s',
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.transform = 'scale(1.1)'
+          e.currentTarget.style.boxShadow = '0 6px 24px rgba(37,211,102,.6)'
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.transform = 'scale(1)'
+          e.currentTarget.style.boxShadow = '0 4px 16px rgba(37,211,102,.45)'
+        }}>
+        {/* WhatsApp SVG */}
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M16 2C8.268 2 2 8.268 2 16c0 2.47.668 4.784 1.832 6.77L2 30l7.438-1.795A13.935 13.935 0 0016 30c7.732 0 14-6.268 14-14S23.732 2 16 2z" fill="#fff"/>
+          <path d="M23.5 20.5c-.3.85-1.5 1.55-2.45 1.75-.65.13-1.5.24-4.35-1-3.65-1.57-6-5.3-6.18-5.55-.17-.25-1.42-1.9-1.42-3.62s.9-2.57 1.22-2.92c.3-.33.65-.42.87-.42.22 0 .43 0 .62.01.2.01.47-.08.73.55.27.65.9 2.22.98 2.38.08.17.13.37.03.6-.1.22-.15.36-.3.55-.15.2-.32.44-.45.58-.15.16-.3.34-.13.65.17.3.77 1.27 1.65 2.05 1.13 1 2.08 1.32 2.38 1.47.3.15.47.12.65-.07.17-.2.75-.87 1-.17.25.3.47.37.65.37s.37-.05.6-.15c.22-.1 1.42-.67 1.62-1.32.2-.65.2-1.2.14-1.32-.06-.1-.22-.15-.45-.27z" fill="#25D366"/>
+        </svg>
+      </a>
+
       <style>{`
         @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.85)} }
+        @media (max-width: 767px) { .wa-fab { bottom: 80px !important; } }
 
         /* Desktop (≥1024px): 3 cols */
         .wa-col       { width: 264px; flex-shrink: 0; display: flex; flex-direction: column; }
