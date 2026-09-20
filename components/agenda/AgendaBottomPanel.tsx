@@ -316,9 +316,9 @@ export default function AgendaBottomPanel() {
       background: 'var(--panel)',
     }}>
       {/* ── Tab switcher ── */}
-      <div className="flex border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
+      <div className="flex border-b shrink-0" style={{ borderColor: 'var(--border)', overflowX: 'auto', scrollbarWidth: 'none' }}>
         <button onClick={() => setPanelView('agenda')}
-          className="flex-1 py-1.5 text-[11px] font-semibold border-b-2 transition-colors"
+          className="flex-none py-1.5 px-3 text-[11px] font-semibold border-b-2 transition-colors whitespace-nowrap"
           style={{
             borderColor: panelView === 'agenda' ? 'var(--blue)' : 'transparent',
             color: panelView === 'agenda' ? 'var(--blue)' : 'var(--muted)',
@@ -326,21 +326,23 @@ export default function AgendaBottomPanel() {
           📅 Agenda
         </button>
         <button onClick={() => setPanelView('approvals')}
-          className="flex-1 py-1.5 text-[11px] font-semibold border-b-2 transition-colors relative"
+          className="flex-none py-1.5 px-3 text-[11px] font-semibold border-b-2 transition-colors whitespace-nowrap"
           style={{
             borderColor: panelView === 'approvals' ? '#F0A500' : 'transparent',
             color: panelView === 'approvals' ? '#F0A500' : 'var(--muted)',
           }}>
-          ✅ Aprovações
-          {approvalCount > 0 && (
-            <span className="absolute -top-0.5 right-3 w-4 h-4 rounded-full text-[9px] font-bold text-white flex items-center justify-center"
-              style={{ background: '#F0A500' }}>
-              {approvalCount}
-            </span>
-          )}
+          <span className="inline-flex items-center justify-center gap-1">
+            ✅ Aprovações
+            {approvalCount > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold text-white leading-none"
+                style={{ background: '#F0A500' }}>
+                {approvalCount}
+              </span>
+            )}
+          </span>
         </button>
         <button onClick={() => setPanelView('config')}
-          className="flex-1 py-1.5 text-[11px] font-semibold border-b-2 transition-colors"
+          className="flex-none py-1.5 px-3 text-[11px] font-semibold border-b-2 transition-colors whitespace-nowrap"
           style={{
             borderColor: panelView === 'config' ? '#A78BFA' : 'transparent',
             color: panelView === 'config' ? '#A78BFA' : 'var(--muted)',
@@ -348,7 +350,7 @@ export default function AgendaBottomPanel() {
           ⚙️ Config
         </button>
         <button onClick={() => setPanelView('schedules')}
-          className="flex-1 py-1.5 text-[11px] font-semibold border-b-2 transition-colors"
+          className="flex-none py-1.5 px-3 text-[11px] font-semibold border-b-2 transition-colors whitespace-nowrap"
           style={{
             borderColor: panelView === 'schedules' ? '#3B9EFF' : 'transparent',
             color: panelView === 'schedules' ? '#3B9EFF' : 'var(--muted)',

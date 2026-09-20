@@ -4,6 +4,7 @@ import WaPanel from '@/components/wa/WaPanel'
 import PipelinePanel, { type PipelineState } from '@/components/pipeline/PipelinePanel'
 import LogPanel, { type LogEntry } from '@/components/log/LogPanel'
 import AgendaBottomPanel from '@/components/agenda/AgendaBottomPanel'
+import { useApprovalCount } from '@/components/agenda/ApprovalPanel'
 
 const EMPTY_PIPELINE: PipelineState = { active: [], done: [], workflow: null }
 
@@ -30,6 +31,7 @@ export default function AppLayout() {
   const [stats, setStats]         = useState({ total: 0, tokens: 0, latency: 0, cost: 0 })
   const [mobileTab, setMobileTab] = useState<MobileTab>('wa')
   const [logOpen, setLogOpen]     = useState(true)
+  const approvalCount             = useApprovalCount()
 
   const handleLog = useCallback((e: LogEntry) => {
     setLogEntries(prev => [...prev, e])
@@ -148,13 +150,29 @@ export default function AppLayout() {
           <button key={tab.id}
             onClick={() => setMobileTab(tab.id)}
             style={{
-              flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+              flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative',
               gap: 2, padding: '8px 0 6px', border: 'none', background: 'none', cursor: 'pointer',
               color: mobileTab === tab.id ? 'var(--green)' : 'var(--muted)',
               fontSize: 10, fontWeight: mobileTab === tab.id ? 700 : 400,
               transition: 'color .15s',
             }}>
-            <span style={{ fontSize: 20, lineHeight: 1 }}>{tab.icon}</span>
+            <span style={{ fontSize: 20, lineHeight: 1, position: 'relative', display: 'inline-block' }}>
+              {tab.icon}
+              {/* Approval badge on Agenda icon */}
+              {tab.id === 'agenda' && approvalCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: -4, right: -6,
+                  minWidth: 16, height: 16, borderRadius: 8,
+                  background: '#F0A500', color: '#fff',
+                  fontSize: 9, fontWeight: 800,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  padding: '0 3px', lineHeight: 1,
+                  boxShadow: '0 1px 4px rgba(0,0,0,.3)',
+                }}>
+                  {approvalCount}
+                </span>
+              )}
+            </span>
             {tab.label}
             {mobileTab === tab.id && (
               <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--green)', marginTop: 1 }} />
