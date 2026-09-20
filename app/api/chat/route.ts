@@ -318,8 +318,66 @@ async function consultarAgendamentos(
   }
 }
 
+type ServiceConfig = { name: string; description: string }
+
+async function loadClinicConfig(db: SupabaseClient): Promise<{
+  clinicName: string
+  workingHours: string
+  services: ServiceConfig[]
+  outOfScopeResponse: string
+}> {
+  const { data } = await db.from('clinic_config').select('key, value')
+  const cfg = Object.fromEntries((data ?? []).map(r => [r.key, r.value]))
+
+  const services: ServiceConfig[] = Array.isArray(cfg.services)
+    ? (cfg.services as ServiceConfig[])
+    : [
+        { name: 'Clínico Geral',  description: 'Consultas gerais' },
+        { name: 'Cardiologia',    description: 'Coração e cardiovascular' },
+        { name: 'Dermatologia',   description: 'Pele, cabelo e unhas' },
+        { name: 'Pediatria',      description: 'Atendimento infantil' },
+        { name: 'Ginecologia',    description: 'Saúde da mulher' },
+        { name: 'Ortopedia',      description: 'Ossos e articulações' },
+      ]
+
+  return {
+    clinicName:       typeof cfg.clinic_name === 'string' ? cfg.clinic_name : 'Clínica São Lucas',
+    workingHours:     typeof cfg.working_hours === 'string' ? cfg.working_hours : 'Segunda a Sexta, 8h às 18h',
+    services,
+    outOfScopeResponse: typeof cfg.out_of_scope_response === 'string'
+      ? cfg.out_of_scope_response
+      : 'Lamento, mas não atendemos essa especialidade. Posso ajudar com: {services_list}',
+  }
+}
+
+function buildSystemPrompt(cfg: Awaited<ReturnType<typeof loadClinicConfig>>): string {
+  const servicesList = cfg.services
+    .map(s => `• *${s.name}* — ${s.description}`)
+    .join('\n')
+  const serviceNames = cfg.services.map(s => s.name).join(', ')
+
+  const outOfScope = cfg.outOfScopeResponse
+    .replace('{clinic_name}', cfg.clinicName)
+    .replace('{services_list}', servicesList)
+
+  return `Você é o Coordenador Clínico da ${cfg.clinicName}, responsável por orquestrar o atendimento de pacientes via WhatsApp.
+
+SERVIÇOS DISPONÍVEIS NA ${cfg.clinicName.toUpperCase()}:
+${servicesList}
+
+Horário de funcionamento: ${cfg.workingHours}
+
+REGRA DE ESCOPO (OBRIGATÓRIA):
+- Atenda APENAS solicitações relacionadas às especialidades listadas acima: ${serviceNames}
+- Se o paciente solicitar uma especialidade, serviço ou procedimento NÃO listado, responda EXATAMENTE com esta mensagem (adaptando conforme o contexto, mas mantendo o tom):
+  "${outOfScope}"
+- Nunca tente agendar ou buscar disponibilidade para uma especialidade fora da lista.
+- Exemplos de serviços fora do escopo: emergência 24h, cirurgia, internação, pronto-socorro, especialidades não listadas.
+- Se a solicitação estiver fora do escopo mas houver urgência aparente → ainda assim redirecione para o SAMU (192) ou pronto-socorro, mas informe que a clínica não oferece esse atendimento.`
+}
+
 // Workflow definitions — maps to real Claude tool calls
-const SYSTEM_PROMPT = `Você é o Coordenador Clínico da Clínica São Lucas, responsável por orquestrar o atendimento de pacientes via WhatsApp.
+const SYSTEM_PROMPT_BASE = `Você é o Coordenador Clínico da Clínica São Lucas, responsável por orquestrar o atendimento de pacientes via WhatsApp.
 
 Seu papel:
 - Identificar a intenção do paciente (agendamento, urgência, cadastro, histórico, receita)
@@ -373,6 +431,7 @@ Depois de chamar a ferramenta com sucesso:
 - Se status = "lista_espera" → confirme que entrou na fila de espera e que será avisado se o horário abrir
 
 Contexto regulatório: LGPD Art.11 (dados de saúde = dados sensíveis), CFM 2.314/2022 (sigilo médico), WhatsApp Business API (somente templates HSM fora da janela de 24h).`
+// Note: SYSTEM_PROMPT_BASE is combined with dynamic clinic config at request time via buildSystemPrompt()
 
 function simulatedResponse(workflow: string): string {
   switch (workflow) {
@@ -412,6 +471,10 @@ export async function POST(req: NextRequest) {
     }
 
     const db = createServerClient()
+
+    // Load clinic config for dynamic system prompt
+    const clinicCfg = await loadClinicConfig(db)
+    const SYSTEM_PROMPT = buildSystemPrompt(clinicCfg) + '\n\n' + SYSTEM_PROMPT_BASE
 
     // Log inbound message
     await db.from('audit_log').insert({

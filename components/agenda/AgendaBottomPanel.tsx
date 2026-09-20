@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { useAppointments } from '@/lib/useAppointments'
 import type { Appointment, AppointmentStatus, Doctor } from '@/types'
 import ApprovalPanel, { useApprovalCount } from './ApprovalPanel'
+import ClinicConfigPanel from '@/components/settings/ClinicConfigPanel'
 
 const DOCTOR_COLORS = ['#3B9EFF', '#14C38E', '#F0A500', '#A78BFA', '#FB923C', '#F472B6', '#22D3EE', '#EF4444']
 
@@ -198,7 +199,7 @@ function ApptDetail({ appt, onAttend, onCancel, detailRef }: {
 
 // ── Main ──────────────────────────────────────────────────────────────
 export default function AgendaBottomPanel() {
-  const [panelView, setPanelView]       = useState<'agenda' | 'approvals'>('agenda')
+  const [panelView, setPanelView]       = useState<'agenda' | 'approvals' | 'config'>('agenda')
   const [dayOffset, setDayOffset]       = useState(0)
   const [selId, setSelId]               = useState<string | null>(null)
   const [filter, setFilter]             = useState('todos')
@@ -290,12 +291,27 @@ export default function AgendaBottomPanel() {
             </span>
           )}
         </button>
+        <button onClick={() => setPanelView('config')}
+          className="flex-1 py-1.5 text-[11px] font-semibold border-b-2 transition-colors"
+          style={{
+            borderColor: panelView === 'config' ? '#A78BFA' : 'transparent',
+            color: panelView === 'config' ? '#A78BFA' : 'var(--muted)',
+          }}>
+          ⚙️ Config
+        </button>
       </div>
 
       {/* ── Approval panel ── */}
       {panelView === 'approvals' && (
         <div className="flex-1 min-h-0 flex flex-col">
           <ApprovalPanel />
+        </div>
+      )}
+
+      {/* ── Config panel ── */}
+      {panelView === 'config' && (
+        <div className="flex-1 min-h-0 flex flex-col">
+          <ClinicConfigPanel />
         </div>
       )}
 
