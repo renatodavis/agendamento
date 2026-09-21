@@ -58,13 +58,21 @@ export async function PUT(req: NextRequest) {
 
   if (!doctor_id) return NextResponse.json({ error: 'doctor_id required' }, { status: 400 })
 
-  // Delete existing and re-insert
+  // DB3: Backup existing schedules for rollback on insert failure
+  const { data: existing } = await db
+    .from('doctor_schedules')
+    .select('day_of_week, start_time, end_time, slot_minutes, doctor_id')
+    .eq('doctor_id', doctor_id)
+
   await db.from('doctor_schedules').delete().eq('doctor_id', doctor_id)
 
   if (schedules.length > 0) {
     const rows = schedules.map(s => ({ ...s, doctor_id }))
     const { error } = await db.from('doctor_schedules').insert(rows)
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) {
+      if (existing?.length) await db.from('doctor_schedules').insert(existing)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
   }
 
   return NextResponse.json({ ok: true })

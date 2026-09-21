@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { createServerClient } from '@/lib/supabase'
+import { processMessage } from '@/lib/chat'
 
 // Meta WhatsApp Business Cloud API webhook
 // Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks
@@ -9,6 +10,10 @@ const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN
 const APP_SECRET   = process.env.WHATSAPP_APP_SECRET
 const WA_TOKEN     = process.env.WHATSAPP_API_TOKEN
 const WA_PHONE_ID  = process.env.WHATSAPP_PHONE_NUMBER_ID
+
+// O1: Rate limiting — max inbound messages per minute per session
+const RATE_LIMIT_MAX = 10
+const RATE_LIMIT_WINDOW_MS = 60_000
 
 // ── S6: Valida assinatura X-Hub-Signature-256 ────────────────────────
 // Se APP_SECRET não estiver configurado, a validação é ignorada (modo desenvolvimento).
@@ -93,7 +98,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Upsert WhatsApp session (only stable columns — name requires migration 0002)
+    // Upsert WhatsApp session
     const { data: session } = await db
       .from('wa_sessions')
       .upsert({ phone, last_inbound_at: new Date().toISOString() }, { onConflict: 'phone' })
@@ -108,6 +113,21 @@ export async function POST(req: NextRequest) {
     // Check opt-out
     if (session?.opt_out_at) {
       return NextResponse.json({ ok: true })
+    }
+
+    // O1: Rate limiting — max RATE_LIMIT_MAX inbound messages per RATE_LIMIT_WINDOW_MS
+    if (session?.id) {
+      const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString()
+      const { count } = await db
+        .from('wa_messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('session_id', session.id)
+        .eq('direction', 'inbound')
+        .gte('sent_at', windowStart)
+      if ((count ?? 0) >= RATE_LIMIT_MAX) {
+        console.warn('[whatsapp/POST] rate limit excedido para sessão:', session.id)
+        return NextResponse.json({ ok: true })
+      }
     }
 
     // ── HITL intercept: approved approval waiting for patient confirmation ──
@@ -126,7 +146,6 @@ export async function POST(req: NextRequest) {
         const isNo  = /^(n[aã]o|n|no|2|outro|cancelar)$/i.test(text.trim())
 
         if (isYes) {
-          // Book the appointment directly
           const { data: appt } = await db
             .from('appointments')
             .insert({
@@ -156,11 +175,15 @@ export async function POST(req: NextRequest) {
             `Clínica São Lucas 🏥\nQualquer dúvida, estamos à disposição!`
 
           if (WA_TOKEN && WA_PHONE_ID) {
-            await fetch(`https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`, {
+            const waRes = await fetch(`https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`, {
               method: 'POST',
               headers: { Authorization: `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' },
               body: JSON.stringify({ messaging_product: 'whatsapp', to: phone, type: 'text', text: { body: confirmMsg } }),
             })
+            if (!waRes.ok) {
+              const errBody = await waRes.text().catch(() => '')
+              console.error('[whatsapp/POST] falha ao enviar confirmação HITL:', waRes.status, errBody)
+            }
           }
           await db.from('wa_messages').insert({
             session_id: session.id, direction: 'outbound', body: confirmMsg, status: 'sent',
@@ -174,7 +197,6 @@ export async function POST(req: NextRequest) {
         }
 
         if (isNo) {
-          // Mark rejected, fall through to Claude for natural response
           await db.from('approval_requests').update({
             status: 'rejected',
             rejection_reason: 'Paciente recusou o horário sugerido',
@@ -205,13 +227,12 @@ export async function POST(req: NextRequest) {
       ...(wamid ? { wamid } : {}),
     })
 
-    // Process through AI (reuse chat route logic)
-    const chatRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, sessionId: session?.id, history }),
+    // R2: Chama a lógica de chat diretamente (sem HTTP interno)
+    const { response, workflow } = await processMessage({
+      message: text,
+      sessionId: session?.id,
+      history,
     })
-    const { response, workflow } = await chatRes.json()
 
     // Send reply via WhatsApp Cloud API
     if (response && WA_TOKEN && WA_PHONE_ID) {
@@ -232,6 +253,16 @@ export async function POST(req: NextRequest) {
         }
       )
 
+      // R3: Detecta e loga falhas no envio WhatsApp
+      if (!waRes.ok) {
+        const errBody = await waRes.text().catch(() => '')
+        console.error('[whatsapp/POST] falha ao enviar mensagem:', waRes.status, errBody)
+        await db.from('wa_messages').insert({
+          session_id: session?.id, direction: 'outbound', body: response, status: 'failed',
+        })
+        return NextResponse.json({ ok: true, error: 'whatsapp_send_failed' })
+      }
+
       const waData = await waRes.json()
 
       await db.from('wa_messages').insert({
@@ -241,7 +272,6 @@ export async function POST(req: NextRequest) {
         status: 'sent',
       })
 
-      // Log para auditoria
       await db.from('audit_log').insert({
         actor_type: 'agent',
         actor_id: 'comunicacao-whatsapp',
