@@ -372,10 +372,15 @@ async function consultarAgendamentos(
     }
     if (!patientId) return 'Paciente não cadastrado no sistema ainda.'
 
+    const now = new Date()
+    // Show: upcoming appointments (future) + completed/cancelled in last 7 days
+    const pastCutoff = new Date(now); pastCutoff.setDate(pastCutoff.getDate() - 7)
+
     let query = db
       .from('appointments')
       .select('id, scheduled_at, status, cancel_reason, type, doctor:doctors(name, specialty)')
       .eq('patient_id', patientId)
+      .gte('scheduled_at', pastCutoff.toISOString())
       .order('scheduled_at', { ascending: true })
 
     if (statusFilter) {
@@ -384,13 +389,21 @@ async function consultarAgendamentos(
 
     const { data: appts, error } = await query
     if (error) return `Erro ao consultar agendamentos: ${error.message}`
-    if (!appts || appts.length === 0) {
+
+    // Filter out stale past appointments: "agendada" with date already passed → treat as no-show
+    const validAppts = (appts ?? []).filter(a => {
+      const isPast = new Date(a.scheduled_at) < now
+      if (isPast && (a.status === 'agendada' || a.status === 'confirmada')) return false
+      return true
+    })
+
+    if (validAppts.length === 0) {
       return statusFilter
         ? `Nenhuma consulta com status "${statusFilter}" encontrada.`
-        : 'Nenhuma consulta encontrada para este paciente.'
+        : 'Nenhuma consulta agendada encontrada para este paciente.'
     }
 
-    const lines = appts.map(a => {
+    const lines = validAppts.map(a => {
       const d = new Date(a.scheduled_at)
       const dateStr = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })
       const timeStr = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
