@@ -1,15 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createHmac, timingSafeEqual } from 'crypto'
 import { createServerClient } from '@/lib/supabase'
 
 // Meta WhatsApp Business Cloud API webhook
 // Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks
 
-const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? 'clinica_saolucas_token'
-const WA_TOKEN = process.env.WHATSAPP_API_TOKEN
-const WA_PHONE_ID = process.env.WHATSAPP_PHONE_NUMBER_ID
+const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN
+const APP_SECRET   = process.env.WHATSAPP_APP_SECRET
+const WA_TOKEN     = process.env.WHATSAPP_API_TOKEN
+const WA_PHONE_ID  = process.env.WHATSAPP_PHONE_NUMBER_ID
+
+// ── S6: Valida assinatura X-Hub-Signature-256 ────────────────────────
+function verifySignature(rawBody: string, signature: string | null): boolean {
+  if (!APP_SECRET || !signature) return false
+  const expected = 'sha256=' + createHmac('sha256', APP_SECRET).update(rawBody).digest('hex')
+  try {
+    return timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+  } catch {
+    return false
+  }
+}
 
 // ── GET: Meta webhook verification handshake ─────────────────────────
 export async function GET(req: NextRequest) {
+  if (!VERIFY_TOKEN) {
+    console.error('[whatsapp/GET] WHATSAPP_VERIFY_TOKEN não configurado')
+    return new Response('Forbidden', { status: 403 })
+  }
   const { searchParams } = new URL(req.url)
   const mode = searchParams.get('hub.mode')
   const token = searchParams.get('hub.verify_token')
@@ -24,7 +41,16 @@ export async function GET(req: NextRequest) {
 // ── POST: Receive inbound WhatsApp messages ──────────────────────────
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
+    const rawBody = await req.text()
+
+    // S6: Rejeita requisições sem assinatura válida
+    const signature = req.headers.get('x-hub-signature-256')
+    if (!verifySignature(rawBody, signature)) {
+      console.warn('[whatsapp/POST] assinatura inválida ou APP_SECRET ausente')
+      return new Response('Unauthorized', { status: 401 })
+    }
+
+    const body = JSON.parse(rawBody)
     const db = createServerClient()
 
     // Extract message from Meta webhook payload
@@ -47,8 +73,23 @@ export async function POST(req: NextRequest) {
     if (!message) return NextResponse.json({ ok: true })
 
     const phone = message.from
-    const text = message.text?.body ?? ''
+    const text  = message.text?.body ?? ''
+    const wamid = message.id as string | undefined
     const contactName = value?.contacts?.[0]?.profile?.name ?? null
+
+    // S7: Deduplicação — Meta reenvia o mesmo wamid em retentativas (até 72h)
+    if (wamid) {
+      const { data: existing } = await createServerClient()
+        .from('wa_messages')
+        .select('id')
+        .eq('wamid', wamid)
+        .limit(1)
+        .single()
+      if (existing) {
+        console.log('[whatsapp/POST] wamid duplicado ignorado:', wamid)
+        return NextResponse.json({ ok: true })
+      }
+    }
 
     // Upsert WhatsApp session (only stable columns — name requires migration 0002)
     const { data: session } = await db
@@ -153,12 +194,13 @@ export async function POST(req: NextRequest) {
       content: m.body,
     }))
 
-    // Store inbound message
+    // Store inbound message (wamid gravado para deduplicação de retentativas)
     await db.from('wa_messages').insert({
       session_id: session?.id,
       direction: 'inbound',
       body: text,
       status: 'delivered',
+      ...(wamid ? { wamid } : {}),
     })
 
     // Process through AI (reuse chat route logic)

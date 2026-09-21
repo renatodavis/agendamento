@@ -1,4 +1,5 @@
 'use client'
+import { notFound } from 'next/navigation'
 import { useState, useRef, useEffect } from 'react'
 
 type Msg = { id: string; role: 'user' | 'bot'; text: string; ts: Date }
@@ -35,6 +36,9 @@ function makeWebhookPayload(phone: string, text: string) {
 }
 
 export default function TesteMensagem() {
+  // S8: Disponível apenas em desenvolvimento — retorna 404 em produção
+  if (process.env.NODE_ENV === 'production') notFound()
+
   const [msgs, setMsgs]     = useState<Msg[]>([])
   const [input, setInput]   = useState('')
   const [phone, setPhone]   = useState('5511999990001')

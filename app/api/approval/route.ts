@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
       }
 
       await db.from('audit_log').insert({
-        actor_type: 'receptionist', actor_id: 'receptionist',
+        actor_type: 'receptionist', actor_id: 'recepcao',
         action: 'approval_approved', record_type: 'approval_request', record_id: id,
       })
 
