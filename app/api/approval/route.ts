@@ -111,13 +111,32 @@ export async function POST(req: NextRequest) {
 
     // ── cancelamento: confirm_cancel ──────────────────────────────────────────
     if (action === 'confirm_cancel') {
-      // Cancel linked appointment if present
-      const apptId = (approval.details as { appointment_id?: string } | null)?.appointment_id
+      // Resolve appointment ID: from details jsonb, or fallback to patient's next upcoming
+      let apptId = (approval.details as { appointment_id?: string } | null)?.appointment_id ?? null
+
+      if (!apptId && approval.patient_id) {
+        const { data: appts } = await db
+          .from('appointments')
+          .select('id')
+          .eq('patient_id', approval.patient_id)
+          .not('status', 'in', '("cancelada","lista_espera")')
+          .gte('scheduled_at', new Date().toISOString())
+          .order('scheduled_at', { ascending: true })
+          .limit(1)
+        apptId = appts?.[0]?.id ?? null
+      }
+
       if (apptId) {
-        await db.from('appointments').update({
+        const { error: cancelErr } = await db.from('appointments').update({
           status: 'cancelada',
           cancel_reason: 'Solicitado pelo paciente via WhatsApp',
         }).eq('id', apptId)
+        if (cancelErr) {
+          console.error('[approval confirm_cancel] appointments update failed:', cancelErr)
+          return NextResponse.json({ error: `Falha ao cancelar consulta: ${cancelErr.message}` }, { status: 500 })
+        }
+      } else {
+        console.warn('[approval confirm_cancel] no appointment_id found for approval', id)
       }
 
       await db.from('approval_requests').update({
@@ -136,7 +155,7 @@ export async function POST(req: NextRequest) {
         `Se precisar remarcar, é só nos chamar aqui no WhatsApp! — Clínica São Lucas 🏥`
       await notifyAndLog(db, approval.session_id, msg)
 
-      return NextResponse.json({ ok: true, action: 'confirm_cancel' })
+      return NextResponse.json({ ok: true, action: 'confirm_cancel', cancelled_appointment_id: apptId })
     }
 
     // ── cancelamento / alteracao_horario: keep_appointment ────────────────────
