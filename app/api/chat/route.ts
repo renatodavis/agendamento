@@ -96,7 +96,55 @@ async function executarAgendamento(
     const scheduled_at = new Date(`${datePart}T${timePart}:00`)
     if (isNaN(scheduled_at.getTime())) return `Data inválida: ${preferred_date}`
 
-    // 4. Check for scheduling conflict (same doctor, same hour slot, active status)
+    // 4a. Check if the patient already has an appointment at the same day + same hour
+    if (!lista_espera && patientId) {
+      const dayStart = new Date(scheduled_at); dayStart.setUTCHours(0, 0, 0, 0)
+      const dayEnd   = new Date(scheduled_at); dayEnd.setUTCHours(23, 59, 59, 999)
+      const slotStart = new Date(scheduled_at); slotStart.setMinutes(0, 0, 0)
+      const slotEnd   = new Date(scheduled_at); slotEnd.setMinutes(59, 59, 999)
+
+      const { data: patientSameDay } = await db
+        .from('appointments')
+        .select('id, scheduled_at, doctor:doctors(name, specialty)')
+        .eq('patient_id', patientId)
+        .gte('scheduled_at', dayStart.toISOString())
+        .lte('scheduled_at', dayEnd.toISOString())
+        .not('status', 'in', '("cancelada","lista_espera")')
+
+      if (patientSameDay && patientSameDay.length > 0) {
+        const dateStr = scheduled_at.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })
+        const timeStr = scheduled_at.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
+
+        // Check if any existing is at the exact same hour slot
+        const sameSlot = patientSameDay.filter(a => {
+          const at = new Date(a.scheduled_at)
+          return at >= slotStart && at <= slotEnd
+        })
+        const existingLines = patientSameDay.map(a => {
+          const d = new Date(a.scheduled_at)
+          const doc = a.doctor as unknown as { name: string; specialty: string } | null
+          return `• ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })} — ${doc?.specialty ?? ''} (${doc?.name ?? ''})`
+        }).join('\n')
+
+        if (sameSlot.length > 0) {
+          return JSON.stringify({
+            patient_conflict: true,
+            conflict_type: 'same_slot',
+            scheduled_at: scheduled_at.toISOString(),
+            message: `Você já possui uma consulta no mesmo horário (${timeStr} de ${dateStr}):\n${existingLines}\n\nDeseja:\n• Manter o agendamento *EXISTENTE* e cancelar o novo?\n• Escolher um horário *DIFERENTE*?`,
+          })
+        }
+
+        return JSON.stringify({
+          patient_conflict: true,
+          conflict_type: 'same_day',
+          scheduled_at: scheduled_at.toISOString(),
+          message: `Você já possui ${patientSameDay.length > 1 ? 'consultas' : 'uma consulta'} no dia ${dateStr}:\n${existingLines}\n\nDeseja mesmo agendar outra consulta neste mesmo dia (${timeStr})? Responda *SIM* para confirmar ou escolha uma data *DIFERENTE*.`,
+        })
+      }
+    }
+
+    // 4b. Check for scheduling conflict (same doctor, same hour slot, active status)
     if (!lista_espera) {
       const slotStart = new Date(scheduled_at); slotStart.setMinutes(0, 0, 0)
       const slotEnd   = new Date(scheduled_at); slotEnd.setMinutes(59, 59, 999)
@@ -544,10 +592,19 @@ FLUXO DE DISPONIBILIDADE:
 - Se slots_available for false ou error for true → apresente a mensagem do campo "message" e ofereça contato com a recepção
 - Se o paciente JÁ SOUBER a data/hora exata → NÃO chame consultar_disponibilidade. Use diretamente o fluxo de confirmação SIM/NÃO e depois agendar_consulta. Isso funciona para QUALQUER data futura, independente de quantos dias a frente.
 
-CONFLITO DE HORÁRIO:
+CONFLITO DE HORÁRIO — MÉDICO OCUPADO:
 Se a ferramenta retornar um JSON com "conflict: true", apresente a mensagem do campo "message" ao paciente exatamente como está.
 - Se o paciente responder *FILA* → chame agendar_consulta novamente com lista_espera: true para o mesmo horário
 - Se o paciente responder *OUTRO* → pergunte qual outro horário ou data prefere e reinicie o fluxo
+
+CONFLITO DE PACIENTE — MESMA HORA OU MESMO DIA:
+Se a ferramenta retornar um JSON com "patient_conflict: true", apresente a mensagem do campo "message" ao paciente exatamente como está.
+- Se conflict_type for "same_slot" (exatamente o mesmo horário):
+  • Paciente responde *EXISTENTE* → não crie novo agendamento, informe que o agendamento atual será mantido
+  • Paciente responde *DIFERENTE* → peça nova data/horário e reinicie o fluxo
+- Se conflict_type for "same_day" (mesmo dia, horário diferente):
+  • Paciente responde *SIM* → chame agendar_consulta normalmente para confirmar o segundo agendamento no mesmo dia
+  • Paciente escolhe data *DIFERENTE* → peça nova data e reinicie o fluxo
 
 Depois de chamar a ferramenta com sucesso:
 - Se status = "agendada" → confirme o agendamento com data, hora e médico
