@@ -178,7 +178,7 @@ async function consultarDisponibilidade(
     const tomorrow = new Date(); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1); tomorrow.setUTCHours(0, 0, 0, 0)
     const prefDate = input.preferred_date ? new Date(input.preferred_date + 'T00:00:00Z') : tomorrow
     const startDate = prefDate >= tomorrow ? prefDate : tomorrow
-    const endDate = new Date(startDate); endDate.setUTCDate(endDate.getUTCDate() + 30)
+    const endDate = new Date(startDate); endDate.setUTCDate(endDate.getUTCDate() + 90)
 
     for (const doctor of matchingDoctors) {
       const { data: rawSchedules } = await db
@@ -225,7 +225,7 @@ async function consultarDisponibilidade(
 
     if (!allSlots.length) {
       const names = matchingDoctors.map(d => d.name).join(', ')
-      return JSON.stringify({ error: true, message: `Nenhum horário disponível para ${input.specialty} nos próximos 30 dias (${names}). Tente contato direto com a recepção.` })
+      return JSON.stringify({ error: true, message: `Nenhum horário disponível para ${input.specialty} nos próximos 90 dias (${names}). Tente contato direto com a recepção.` })
     }
 
     // Sort by slot date and build formatted list (up to 5)
@@ -537,12 +537,12 @@ VERIFICAÇÃO DE AGENDA EXISTENTE (obrigatório):
 - Se já tiver consulta marcada → informe e pergunte se deseja fazer outra ou confirmar a existente
 
 FLUXO DE DISPONIBILIDADE:
-- Quando o paciente não souber a data, pedir sugestão, ou perguntar "quando tem vaga" → use consultar_disponibilidade
+- Quando o paciente NÃO souber a data, pedir sugestão, ou perguntar "quando tem vaga" → use consultar_disponibilidade (busca até 90 dias a partir da data preferida)
 - Se a ferramenta retornar slots_available: true, apresente o campo formatted_slots ao paciente assim:
   "Encontrei os seguintes horários disponíveis:\n[formatted_slots]\nQual prefere?"
 - Após o paciente escolher um horário → inicie o fluxo de confirmação SIM/NÃO e depois chame agendar_consulta com a data e médico escolhidos
 - Se slots_available for false ou error for true → apresente a mensagem do campo "message" e ofereça contato com a recepção
-- Se o paciente já souber a data/hora exata que quer → use o fluxo normal de confirmação SIM/NÃO e depois agendar_consulta
+- Se o paciente JÁ SOUBER a data/hora exata → NÃO chame consultar_disponibilidade. Use diretamente o fluxo de confirmação SIM/NÃO e depois agendar_consulta. Isso funciona para QUALQUER data futura, independente de quantos dias a frente.
 
 CONFLITO DE HORÁRIO:
 Se a ferramenta retornar um JSON com "conflict: true", apresente a mensagem do campo "message" ao paciente exatamente como está.
