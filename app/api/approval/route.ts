@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { requireAuth } from '@/lib/auth'
 
 const WA_TOKEN    = process.env.WHATSAPP_API_TOKEN
 const WA_PHONE_ID = process.env.WHATSAPP_PHONE_NUMBER_ID
@@ -37,6 +38,9 @@ async function notifyAndLog(
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth()
+  if (auth instanceof NextResponse) return auth
+
   try {
     const { id, action, rejectionReason } = await req.json()
     if (!id || !action) return NextResponse.json({ error: 'id e action são obrigatórios' }, { status: 400 })

@@ -1,5 +1,7 @@
 'use client'
 import { useState, useCallback } from 'react'
+import { createBrowserClient } from '@supabase/ssr'
+import { useRouter } from 'next/navigation'
 import WaPanel from '@/components/wa/WaPanel'
 import PipelinePanel, { type PipelineState } from '@/components/pipeline/PipelinePanel'
 import LogPanel, { type LogEntry } from '@/components/log/LogPanel'
@@ -32,6 +34,18 @@ export default function AppLayout() {
   const [mobileTab, setMobileTab] = useState<MobileTab>('wa')
   const [logOpen, setLogOpen]     = useState(true)
   const approvalCount             = useApprovalCount()
+  const router = useRouter()
+
+  const sb = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
+  async function handleLogout() {
+    await sb.auth.signOut()
+    router.push('/login')
+    router.refresh()
+  }
 
   const handleLog = useCallback((e: LogEntry) => {
     setLogEntries(prev => [...prev, e])
@@ -93,6 +107,17 @@ export default function AppLayout() {
             }}
             title={logOpen ? 'Recolher log' : 'Expandir log'}>
             {logOpen ? '⊟ Log' : '⊞ Log'}
+          </button>
+          <button
+            onClick={handleLogout}
+            style={{
+              padding: '4px 10px', borderRadius: 8, fontSize: 10, fontWeight: 600,
+              border: '1px solid var(--border)', background: 'var(--card)',
+              color: 'var(--muted)', cursor: 'pointer', letterSpacing: '.02em',
+              boxShadow: 'var(--shadow-sm)',
+            }}
+            title="Sair">
+            Sair
           </button>
         </div>
 

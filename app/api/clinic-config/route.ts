@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { requireAuth } from '@/lib/auth'
 
 export async function GET() {
   const db = createServerClient()
@@ -10,6 +11,9 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
+  const auth = await requireAuth()
+  if (auth instanceof NextResponse) return auth
+
   try {
     const body = await req.json() as Record<string, unknown>
     const db = createServerClient()

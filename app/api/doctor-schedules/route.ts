@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { requireAuth } from '@/lib/auth'
 
 const DAY_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
@@ -46,6 +47,9 @@ export async function GET() {
 // PUT /api/doctor-schedules — upsert schedules for one doctor
 // Body: { doctor_id, schedules: [{ day_of_week, start_time, end_time, slot_minutes }] }
 export async function PUT(req: NextRequest) {
+  const auth = await requireAuth()
+  if (auth instanceof NextResponse) return auth
+
   const db = createServerClient()
   const { doctor_id, schedules } = await req.json() as {
     doctor_id: string
