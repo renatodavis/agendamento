@@ -819,61 +819,73 @@ export async function POST(req: NextRequest) {
     })
     gen1?.end()
 
-    // Execute tool calls and feed results back
-    if (first.stop_reason === 'tool_use') {
+    // Agentic tool loop — keeps executing tool calls until the model stops or max turns reached
+    const MAX_TURNS = 5
+    let turnIndex = 1
+    let totalToolCallCount = 0
+
+    async function executeTool(t: Anthropic.ToolUseBlock): Promise<string> {
+      const toolStart = Date.now()
+      let content = 'OK'
+      if (t.name === 'agendar_consulta') {
+        content = await executarAgendamento(db, t.input as AgendamentoInput, sessionId)
+      } else if (t.name === 'consultar_agendamentos') {
+        const { status_filter } = t.input as { status_filter?: string }
+        content = await consultarAgendamentos(db, sessionId, status_filter)
+      } else if (t.name === 'consultar_disponibilidade') {
+        const { specialty, preferred_date } = t.input as { specialty: string; preferred_date?: string }
+        content = await consultarDisponibilidade(db, { specialty, preferred_date })
+      } else if (t.name === 'verificar_urgencia') {
+        content = JSON.stringify({ urgencia: true, encaminhar: 'pronto-socorro' })
+      } else if (t.name === 'escalar_para_recepcao') {
+        content = await escalarParaRecepcao(
+          db,
+          t.input as { request_type: 'cancelamento' | 'atendente' | 'alteracao_horario'; patient_name?: string; notes?: string; appointment_id?: string },
+          sessionId
+        )
+      }
+      totalToolCallCount++
+      trace?.span({
+        name: `tool:${t.name}`,
+        input: t.input,
+        output: content,
+        startTime: new Date(toolStart),
+        endTime: new Date(),
+        metadata: { tool_index: totalToolCallCount },
+      })
+      return content
+    }
+
+    while (first.stop_reason === 'tool_use' && turnIndex < MAX_TURNS) {
       const toolUseBlocks = first.content.filter(c => c.type === 'tool_use') as Anthropic.ToolUseBlock[]
-      let toolCallCount = 0
 
       const toolResults: Anthropic.ToolResultBlockParam[] = await Promise.all(
-        toolUseBlocks.map(async t => {
-          let content = 'OK'
-          const toolStart = Date.now()
-          if (t.name === 'agendar_consulta') {
-            content = await executarAgendamento(db, t.input as AgendamentoInput, sessionId)
-          } else if (t.name === 'consultar_agendamentos') {
-            const { status_filter } = t.input as { status_filter?: string }
-            content = await consultarAgendamentos(db, sessionId, status_filter)
-          } else if (t.name === 'consultar_disponibilidade') {
-            const { specialty, preferred_date } = t.input as { specialty: string; preferred_date?: string }
-            content = await consultarDisponibilidade(db, { specialty, preferred_date })
-          } else if (t.name === 'verificar_urgencia') {
-            content = JSON.stringify({ urgencia: true, encaminhar: 'pronto-socorro' })
-          } else if (t.name === 'escalar_para_recepcao') {
-            content = await escalarParaRecepcao(
-              db,
-              t.input as { request_type: 'cancelamento' | 'atendente' | 'alteracao_horario'; patient_name?: string; notes?: string; appointment_id?: string },
-              sessionId
-            )
-          }
-          toolCallCount++
-          trace?.span({
-            name: `tool:${t.name}`,
-            input: t.input,
-            output: content,
-            startTime: new Date(toolStart),
-            endTime: new Date(),
-            metadata: { tool_index: toolCallCount },
-          })
-          return { type: 'tool_result' as const, tool_use_id: t.id, content }
-        })
+        toolUseBlocks.map(async t => ({
+          type: 'tool_result' as const,
+          tool_use_id: t.id,
+          content: await executeTool(t),
+        }))
       )
 
       messages.push({ role: 'assistant', content: first.content })
       messages.push({ role: 'user', content: toolResults })
 
-      const turn2Start = Date.now()
+      turnIndex++
+      const turnStart = Date.now()
       first = await anthropic.messages.create({
         model: 'claude-sonnet-5',
         max_tokens: 1024,
         system: SYSTEM_PROMPT,
         messages,
+        // Only allow tools for intermediate turns, not on final turn
+        ...(turnIndex < MAX_TURNS ? { tools: TOOLS } : {}),
       })
 
       totalInputTokens  += first.usage.input_tokens
       totalOutputTokens += first.usage.output_tokens
 
-      const gen2 = trace?.generation({
-        name: 'coordenador-turn-2',
+      const genN = trace?.generation({
+        name: `coordenador-turn-${turnIndex}`,
         model: 'claude-sonnet-5',
         input: messages,
         output: first.content,
@@ -882,14 +894,14 @@ export async function POST(req: NextRequest) {
           output: first.usage.output_tokens,
           unit: 'TOKENS',
         },
-        startTime: new Date(turn2Start),
+        startTime: new Date(turnStart),
         endTime: new Date(),
         metadata: {
-          tool_calls: toolCallCount,
+          tool_calls: totalToolCallCount,
           cost_usd: first.usage.input_tokens * COST_INPUT + first.usage.output_tokens * COST_OUTPUT,
         },
       })
-      gen2?.end()
+      genN?.end()
     }
 
     const textContent = first.content.find(c => c.type === 'text') as Anthropic.TextBlock | undefined
