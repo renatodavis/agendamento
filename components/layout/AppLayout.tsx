@@ -122,7 +122,7 @@ export default function AppLayout() {
         {/* Center: Agenda + Pipeline */}
         <div className={`center-col ${mobileTab === 'agenda' ? 'mobile-show' : 'mobile-hide'}`}
           style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, borderRight: '1px solid var(--border)', overflow: 'hidden' }}>
-          <AgendaBottomPanel />
+          <AgendaBottomPanel approvalCount={approvalCount} />
           <PipelinePanel state={pipeline} />
         </div>
 

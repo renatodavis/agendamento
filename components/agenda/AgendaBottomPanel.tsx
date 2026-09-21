@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useAppointments } from '@/lib/useAppointments'
 import type { Appointment, AppointmentStatus, Doctor } from '@/types'
-import ApprovalPanel, { useApprovalCount } from './ApprovalPanel'
+import ApprovalPanel from './ApprovalPanel'
 import ClinicConfigPanel from '@/components/settings/ClinicConfigPanel'
 import DoctorSchedulesPanel from '@/components/settings/DoctorSchedulesPanel'
 import AgendaQueueView from './AgendaQueueView'
@@ -245,7 +245,7 @@ function ApptDetail({ appt, onAttend, onCancel, detailRef }: {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────
-export default function AgendaBottomPanel() {
+export default function AgendaBottomPanel({ approvalCount = 0 }: { approvalCount?: number }) {
   const [panelView, setPanelView]       = useState<'agenda' | 'approvals' | 'config' | 'schedules'>('agenda')
   const [agendaView, setAgendaView]     = useState<'list' | 'queue'>('list')
   const [dayOffset, setDayOffset]       = useState(0)
@@ -253,7 +253,6 @@ export default function AgendaBottomPanel() {
   const [filter, setFilter]             = useState('todos')
   const [doctorFilter, setDoctorFilter] = useState<string | null>(null)
   const detailRef                       = useRef<HTMLDivElement>(null)
-  const approvalCount                   = useApprovalCount()
 
   const { appointments, loading, error, updateStatus } = useAppointments(dayOffset)
   const selAppt = appointments.find(a => a.id === selId) ?? null
