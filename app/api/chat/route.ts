@@ -598,7 +598,12 @@ export async function POST(req: NextRequest) {
 
     // Load clinic config for dynamic system prompt
     const clinicCfg = await loadClinicConfig(db)
-    const SYSTEM_PROMPT = buildSystemPrompt(clinicCfg) + '\n\n' + SYSTEM_PROMPT_BASE
+    const nowBrt = new Date(Date.now() - 3 * 60 * 60 * 1000) // UTC-3 (Brasília)
+    const todayStr = nowBrt.toISOString().split('T')[0]
+    const weekdays = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado']
+    const todayWeekday = weekdays[nowBrt.getUTCDay()]
+    const DATE_CONTEXT = `DATA E HORA ATUAL (Brasília, UTC-3): ${todayStr} (${todayWeekday}). Use esta data como referência para calcular "hoje", "amanhã", "quarta-feira", etc. Ao agendar, converta o dia da semana mencionado pelo paciente para a data YYYY-MM-DD correta relativa a hoje.`
+    const SYSTEM_PROMPT = buildSystemPrompt(clinicCfg) + '\n\n' + DATE_CONTEXT + '\n\n' + SYSTEM_PROMPT_BASE
 
     // Log inbound message
     await db.from('audit_log').insert({
