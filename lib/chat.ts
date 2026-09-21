@@ -74,6 +74,30 @@ async function executarAgendamento(
     const scheduled_at = new Date(`${datePart}T${timePart}:00`)
     if (isNaN(scheduled_at.getTime())) return `Data inválida: ${preferred_date}`
 
+    // R4: Valida se o horário solicitado está dentro do expediente do médico
+    const dayOfWeek = scheduled_at.getUTCDay()
+    const { data: daySchedule } = await db
+      .from('doctor_schedules')
+      .select('start_time, end_time')
+      .eq('doctor_id', doctor.id)
+      .eq('day_of_week', dayOfWeek)
+      .single()
+
+    if (!daySchedule) {
+      const dayNames = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado']
+      return `Dr(a). ${doctor.name} não atende às ${dayNames[dayOfWeek]}s. Use a ferramenta consultar_disponibilidade para ver os horários disponíveis.`
+    } else {
+      const [startH, startM] = (daySchedule.start_time as string).split(':').map(Number)
+      const [endH, endM]     = (daySchedule.end_time   as string).split(':').map(Number)
+      const reqMinutes   = scheduled_at.getUTCHours() * 60 + scheduled_at.getUTCMinutes()
+      const startMinutes = startH * 60 + startM
+      const endMinutes   = endH   * 60 + endM
+      if (reqMinutes < startMinutes || reqMinutes >= endMinutes) {
+        const timeStr = scheduled_at.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
+        return `O horário das ${timeStr} está fora do período de atendimento de Dr(a). ${doctor.name} (${daySchedule.start_time}–${daySchedule.end_time}). Use consultar_disponibilidade para ver os próximos horários disponíveis.`
+      }
+    }
+
     if (!lista_espera && patientId) {
       const dayStart = new Date(scheduled_at); dayStart.setUTCHours(0, 0, 0, 0)
       const dayEnd   = new Date(scheduled_at); dayEnd.setUTCHours(23, 59, 59, 999)

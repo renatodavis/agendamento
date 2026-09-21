@@ -115,6 +115,49 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true })
     }
 
+    // S12: LGPD consent — obrigatório no primeiro contato (Art. 11 Lei 13.709/2018)
+    if (session?.id && !session?.lgpd_consent_at) {
+      const isConsent = /^(sim|s|yes|1|aceito|aceitar|concordo|autorizo|ok)$/i.test(text.trim())
+
+      if (isConsent) {
+        await db.from('wa_sessions').update({ lgpd_consent_at: new Date().toISOString() }).eq('id', session.id)
+        // Armazena mensagem de aceite e deixa o fluxo continuar normalmente
+        // (a próxima mensagem do paciente já será processada pela IA)
+      } else {
+        // Primeiro contato — solicita consentimento antes de processar
+        const consentMsg =
+          `🏥 *Clínica São Lucas — Privacidade de Dados*\n\n` +
+          `Olá! Para iniciar seu atendimento, precisamos do seu consentimento conforme a *Lei Geral de Proteção de Dados (LGPD — Lei 13.709/2018)*.\n\n` +
+          `📋 *Seus dados serão utilizados para:*\n` +
+          `• Agendamento e controle de consultas\n` +
+          `• Comunicação sobre seus atendimentos\n` +
+          `• Prontuário médico (dados sensíveis de saúde, Art. 11 LGPD)\n\n` +
+          `🔒 Seus dados são protegidos e *não serão compartilhados* com terceiros sem sua autorização.\n\n` +
+          `Responda *SIM* para aceitar e iniciar o atendimento.`
+
+        // Salva mensagem inbound e resposta de consentimento
+        await db.from('wa_messages').insert({
+          session_id: session.id, direction: 'inbound', body: text, status: 'delivered',
+          ...(wamid ? { wamid } : {}),
+        })
+        if (WA_TOKEN && WA_PHONE_ID) {
+          const waRes = await fetch(`https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messaging_product: 'whatsapp', to: phone, type: 'text', text: { body: consentMsg } }),
+          })
+          if (!waRes.ok) {
+            const errBody = await waRes.text().catch(() => '')
+            console.error('[whatsapp/POST] falha ao enviar mensagem LGPD:', waRes.status, errBody)
+          }
+        }
+        await db.from('wa_messages').insert({
+          session_id: session.id, direction: 'outbound', body: consentMsg, status: 'sent',
+        })
+        return NextResponse.json({ ok: true, action: 'lgpd_consent_requested' })
+      }
+    }
+
     // O1: Rate limiting — max RATE_LIMIT_MAX inbound messages per RATE_LIMIT_WINDOW_MS
     if (session?.id) {
       const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString()
