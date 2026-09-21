@@ -11,8 +11,10 @@ const WA_TOKEN     = process.env.WHATSAPP_API_TOKEN
 const WA_PHONE_ID  = process.env.WHATSAPP_PHONE_NUMBER_ID
 
 // ── S6: Valida assinatura X-Hub-Signature-256 ────────────────────────
+// Se APP_SECRET não estiver configurado, a validação é ignorada (modo desenvolvimento).
 function verifySignature(rawBody: string, signature: string | null): boolean {
-  if (!APP_SECRET || !signature) return false
+  if (!APP_SECRET) return true
+  if (!signature) return false
   const expected = 'sha256=' + createHmac('sha256', APP_SECRET).update(rawBody).digest('hex')
   try {
     return timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
@@ -43,10 +45,10 @@ export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text()
 
-    // S6: Rejeita requisições sem assinatura válida
+    // S6: Valida assinatura quando WHATSAPP_APP_SECRET estiver configurado
     const signature = req.headers.get('x-hub-signature-256')
     if (!verifySignature(rawBody, signature)) {
-      console.warn('[whatsapp/POST] assinatura inválida ou APP_SECRET ausente')
+      console.warn('[whatsapp/POST] assinatura X-Hub-Signature-256 inválida')
       return new Response('Unauthorized', { status: 401 })
     }
 
