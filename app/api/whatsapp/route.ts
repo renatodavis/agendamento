@@ -173,6 +173,120 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // ── Intercept: resposta ao lembrete de 24h (SIM confirma / NÃO escala cancelamento) ──
+    if (session?.id && text) {
+      const isYes = /^(sim|s|yes|1|confirmo|vou|estarei|ok|comparecer)$/i.test(text.trim())
+      const isNo  = /^(n[aã]o|n|no|2|cancelar|nao|desmarcar)$/i.test(text.trim())
+
+      if (isYes || isNo) {
+        const windowStart = new Date(Date.now() + 20 * 60 * 60 * 1000).toISOString()
+        const windowEnd   = new Date(Date.now() + 28 * 60 * 60 * 1000).toISOString()
+
+        // Busca consulta com lembrete enviado dentro da janela de 24h
+        const { data: remindedAppt } = await db
+          .from('appointments')
+          .select('id, scheduled_at, patient_id, doctor:doctors(name, specialty)')
+          .eq('session_id', session.id)
+          .not('reminder_sent_at', 'is', null)
+          .in('status', ['agendada', 'confirmada'])
+          .gte('scheduled_at', windowStart)
+          .lte('scheduled_at', windowEnd)
+          .order('scheduled_at', { ascending: true })
+          .limit(1)
+          .single()
+
+        // Fallback: busca por patient_id se session_id não vinculado
+        let appt = remindedAppt
+        if (!appt && session.patient_id) {
+          const { data: byPatient } = await db
+            .from('appointments')
+            .select('id, scheduled_at, patient_id, doctor:doctors(name, specialty)')
+            .eq('patient_id', session.patient_id)
+            .not('reminder_sent_at', 'is', null)
+            .in('status', ['agendada', 'confirmada'])
+            .gte('scheduled_at', windowStart)
+            .lte('scheduled_at', windowEnd)
+            .order('scheduled_at', { ascending: true })
+            .limit(1)
+            .single()
+          appt = byPatient
+        }
+
+        if (appt) {
+          const doctor = appt.doctor as unknown as { name: string; specialty: string } | null
+          const d = new Date(appt.scheduled_at)
+          const dateStr = d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'UTC' })
+          const timeStr = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
+
+          if (isYes) {
+            await db.from('appointments').update({ status: 'confirmada' }).eq('id', appt.id)
+            await db.from('audit_log').insert({
+              actor_type: 'user', actor_id: session.id,
+              action: 'appointment_confirmed_by_patient',
+              record_type: 'appointment', record_id: appt.id,
+            })
+
+            const confirmMsg =
+              `✅ *Presença confirmada!*\n\n` +
+              `📅 ${dateStr} às *${timeStr}*\n` +
+              `👨‍⚕️ ${doctor?.name ?? ''} — ${doctor?.specialty ?? ''}\n\n` +
+              `Te esperamos amanhã! — Clínica São Lucas 🏥`
+
+            await db.from('wa_messages').insert({
+              session_id: session.id, direction: 'inbound', body: text, status: 'delivered',
+              ...(wamid ? { wamid } : {}),
+            })
+            if (WA_TOKEN && WA_PHONE_ID) {
+              await fetch(`https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messaging_product: 'whatsapp', to: phone, type: 'text', text: { body: confirmMsg } }),
+              })
+            }
+            await db.from('wa_messages').insert({
+              session_id: session.id, direction: 'outbound', body: confirmMsg, status: 'sent',
+            })
+            return NextResponse.json({ ok: true, action: 'reminder_confirmed' })
+          }
+
+          if (isNo) {
+            // Escala cancelamento para recepção
+            await db.from('approval_requests').insert({
+              session_id: session.id,
+              patient_id: appt.patient_id,
+              patient_name: contactName ?? phone,
+              doctor_id: null,
+              request_type: 'cancelamento',
+              status: 'pending',
+              message_to_receptionist: `Paciente respondeu NÃO ao lembrete de 24h. Consulta: ${dateStr} às ${timeStr} — ${doctor?.specialty ?? ''}`,
+              details: { appointment_id: appt.id, scheduled_at: appt.scheduled_at, doctor_name: doctor?.name, doctor_specialty: doctor?.specialty },
+            })
+
+            const cancelMsg =
+              `Entendido! Sua solicitação de cancelamento foi registrada. 📋\n\n` +
+              `Nossa equipe entrará em contato para confirmar. — Clínica São Lucas 🏥`
+
+            await db.from('wa_messages').insert({
+              session_id: session.id, direction: 'inbound', body: text, status: 'delivered',
+              ...(wamid ? { wamid } : {}),
+            })
+            if (WA_TOKEN && WA_PHONE_ID) {
+              await fetch(`https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messaging_product: 'whatsapp', to: phone, type: 'text', text: { body: cancelMsg } }),
+              })
+            }
+            await db.from('wa_messages').insert({
+              session_id: session.id, direction: 'outbound', body: cancelMsg, status: 'sent',
+            })
+            return NextResponse.json({ ok: true, action: 'reminder_cancelled' })
+          }
+        }
+      }
+    }
+    // ── end reminder intercept ──
+
     // ── HITL intercept: approved approval waiting for patient confirmation ──
     if (session?.id && text) {
       const { data: pending } = await db
