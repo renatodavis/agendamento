@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { useAppointments } from '@/lib/useAppointments'
 import type { Appointment, AppointmentStatus, HistoryKind } from '@/types'
 import ChatPanel from '@/components/chat/ChatPanel'
+import { useClinicName } from '@/lib/useClinicName'
 
 // ── Status config ─────────────────────────────────────────────────────
 const STATUS: Record<AppointmentStatus, { color: string; label: string; icon: string; fill: boolean }> = {
@@ -254,6 +255,7 @@ function ApptDetail({ appt, onAttend, onCancel, detailRef }: {
 
 // ── Main dashboard ────────────────────────────────────────────────────
 export default function AgendaDashboard() {
+  const clinicName = useClinicName()
   const [dayOffset, setDayOffset] = useState(0)
   const [selId, setSelId]         = useState<string | null>(null)
   const [filter, setFilter]       = useState<string>('todos')
@@ -314,7 +316,7 @@ export default function AgendaDashboard() {
           <div className="w-8 h-8 rounded-lg flex items-center justify-center text-base"
             style={{ background: 'var(--green)' }}>🏥</div>
           <div>
-            <div className="font-display font-bold text-sm leading-none">Clínica São Lucas</div>
+            <div className="font-display font-bold text-sm leading-none">{clinicName}</div>
             <div className="text-[10px] mt-0.5" style={{ color: 'var(--muted)' }}>
               Agenda · Supabase conectado ✓
             </div>

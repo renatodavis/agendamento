@@ -7,6 +7,7 @@ import PipelinePanel, { type PipelineState } from '@/components/pipeline/Pipelin
 import LogPanel, { type LogEntry } from '@/components/log/LogPanel'
 import AgendaBottomPanel from '@/components/agenda/AgendaBottomPanel'
 import { useApprovalCount } from '@/components/agenda/ApprovalPanel'
+import { useClinicName } from '@/lib/useClinicName'
 
 const EMPTY_PIPELINE: PipelineState = { active: [], done: [], workflow: null }
 
@@ -34,6 +35,7 @@ export default function AppLayout() {
   const [mobileTab, setMobileTab] = useState<MobileTab>('wa')
   const [logOpen, setLogOpen]     = useState(true)
   const approvalCount             = useApprovalCount()
+  const clinicName                = useClinicName()
   const router = useRouter()
 
   const sb = createBrowserClient(
@@ -82,7 +84,7 @@ export default function AppLayout() {
           }}>🏥</div>
           <div>
             <div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1, letterSpacing: '-.01em', color: 'var(--foreground)' }}>
-              Clínica São Lucas
+              {clinicName}
             </div>
             <div style={{ fontSize: 9, marginTop: 3, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.06em' }}>
               Sistema de IA ·{' '}
