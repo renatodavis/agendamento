@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { getClinicBasicConfig } from '@/lib/clinic-config-server'
 
 const WA_TOKEN    = process.env.WHATSAPP_API_TOKEN
 const WA_PHONE_ID = process.env.WHATSAPP_PHONE_NUMBER_ID
@@ -17,6 +18,7 @@ export async function GET(req: NextRequest) {
   }
 
   const db = createServerClient()
+  const { clinicName } = await getClinicBasicConfig()
   const now = Date.now()
   const windowStart = new Date(now + WINDOW_MIN_H * 60 * 60 * 1000).toISOString()
   const windowEnd   = new Date(now + WINDOW_MAX_H * 60 * 60 * 1000).toISOString()
@@ -63,7 +65,7 @@ export async function GET(req: NextRequest) {
     const patientName = patient?.name ?? 'Paciente'
 
     const msg =
-      `🏥 *Clínica São Lucas — Lembrete de Consulta*\n\n` +
+      `🏥 *${clinicName} — Lembrete de Consulta*\n\n` +
       `Olá, *${patientName}*! Sua consulta está marcada para *amanhã*:\n\n` +
       `📅 ${dateStr} às *${timeStr}*\n` +
       `👨‍⚕️ ${doctor?.name ?? ''} — ${doctor?.specialty ?? ''}\n\n` +

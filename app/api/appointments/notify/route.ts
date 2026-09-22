@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { getClinicBasicConfig } from '@/lib/clinic-config-server'
 
 const WA_TOKEN    = process.env.WHATSAPP_API_TOKEN
 const WA_PHONE_ID = process.env.WHATSAPP_PHONE_NUMBER_ID
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest) {
     }
 
     const db = createServerClient()
+    const { clinicName } = await getClinicBasicConfig()
 
     // Load appointment with patient + doctor + wa_session phone
     const { data: appt, error } = await db
@@ -105,7 +107,7 @@ export async function POST(req: NextRequest) {
           `Confirmamos o cancelamento da sua consulta com *${doctorName}* (${specialty}) ` +
           `agendada para *${dateStr}*.${reasonStr}\n\n` +
           `Deseja *remarcar* para outro horário?\n\n` +
-          `Responda *SIM* para agendar ou *NÃO* se não precisar. — Clínica São Lucas 🏥`
+          `Responda *SIM* para agendar ou *NÃO* se não precisar. — ${clinicName} 🏥`
       }
     } else {
       return NextResponse.json({ error: `Tipo de notificação desconhecido: ${type}` }, { status: 400 })

@@ -409,7 +409,7 @@ REGRA DE ESCOPO (OBRIGATÓRIA):
 - Em caso de urgência aparente (mesmo fora do escopo) → redirecione ao SAMU (192) ou pronto-socorro e informe que a clínica não oferece esse atendimento.`
 }
 
-const SYSTEM_PROMPT_BASE = `Você é o Coordenador Clínico da Clínica São Lucas, responsável por orquestrar o atendimento de pacientes via WhatsApp.
+function buildCoordinatorPrompt(clinicName: string) { return `Você é o Coordenador Clínico da ${clinicName}, responsável por orquestrar o atendimento de pacientes via WhatsApp.
 
 Seu papel:
 - Identificar a intenção do paciente (agendamento, urgência, cadastro, histórico, receita)
@@ -472,10 +472,10 @@ REGRA CRÍTICA — NUNCA ASSUMA ESTADO DE APROVAÇÃO ANTERIOR:
 
 Após escalar_para_recepcao:
 - cancelamento → "Sua solicitação de cancelamento foi registrada. Nossa equipe entrará em contato em breve. ✅"
-- atendente → "Registrei sua solicitação. Um atendente da Clínica São Lucas entrará em contato em breve. 📞"
+- atendente → "Registrei sua solicitação. Um atendente da ${clinicName} entrará em contato em breve. 📞"
 - alteracao_horario → "Sua solicitação de remarcação foi registrada. Nossa equipe verificará a disponibilidade em breve. 🗓"
 
-Contexto regulatório: LGPD Art.11 (dados de saúde = dados sensíveis), CFM 2.314/2022 (sigilo médico).`
+Contexto regulatório: LGPD Art.11 (dados de saúde = dados sensíveis), CFM 2.314/2022 (sigilo médico).` }
 
 const TOOLS: Anthropic.Tool[] = [
   {
@@ -572,7 +572,7 @@ export async function processMessage(params: {
   const todayStr = nowBrt.toISOString().split('T')[0]
   const weekdays = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado']
   const DATE_CONTEXT = `DATA E HORA ATUAL (Brasília, UTC-3): ${todayStr} (${weekdays[nowBrt.getUTCDay()]}). Use esta data como referência para calcular "hoje", "amanhã", "quarta-feira", etc. Ao agendar, converta o dia da semana mencionado pelo paciente para a data YYYY-MM-DD correta relativa a hoje.`
-  const SYSTEM_PROMPT = buildSystemPrompt(clinicCfg) + '\n\n' + DATE_CONTEXT + '\n\n' + SYSTEM_PROMPT_BASE
+  const SYSTEM_PROMPT = buildSystemPrompt(clinicCfg) + '\n\n' + DATE_CONTEXT + '\n\n' + buildCoordinatorPrompt(clinicCfg.clinicName)
 
   await db.from('audit_log').insert({
     actor_type: 'user', actor_id: sessionId ?? 'anonymous',

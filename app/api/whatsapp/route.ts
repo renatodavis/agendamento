@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { createServerClient } from '@/lib/supabase'
 import { processMessage } from '@/lib/chat'
+import { getClinicBasicConfig } from '@/lib/clinic-config-server'
 
 // Meta WhatsApp Business Cloud API webhook
 // Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks
@@ -59,6 +60,7 @@ export async function POST(req: NextRequest) {
 
     const body = JSON.parse(rawBody)
     const db = createServerClient()
+    const { clinicName } = await getClinicBasicConfig()
 
     // Extract message from Meta webhook payload
     const entry = body?.entry?.[0]
@@ -126,7 +128,7 @@ export async function POST(req: NextRequest) {
       } else {
         // Primeiro contato — solicita consentimento antes de processar
         const consentMsg =
-          `🏥 *Clínica São Lucas — Privacidade de Dados*\n\n` +
+          `🏥 *${clinicName} — Privacidade de Dados*\n\n` +
           `Olá! Para iniciar seu atendimento, precisamos do seu consentimento conforme a *Lei Geral de Proteção de Dados (LGPD — Lei 13.709/2018)*.\n\n` +
           `📋 *Seus dados serão utilizados para:*\n` +
           `• Agendamento e controle de consultas\n` +
@@ -230,7 +232,7 @@ export async function POST(req: NextRequest) {
               `✅ *Presença confirmada!*\n\n` +
               `📅 ${dateStr} às *${timeStr}*\n` +
               `👨‍⚕️ ${doctor?.name ?? ''} — ${doctor?.specialty ?? ''}\n\n` +
-              `Te esperamos amanhã! — Clínica São Lucas 🏥`
+              `Te esperamos amanhã! — ${clinicName} 🏥`
 
             await db.from('wa_messages').insert({
               session_id: session.id, direction: 'inbound', body: text, status: 'delivered',
@@ -264,7 +266,7 @@ export async function POST(req: NextRequest) {
 
             const cancelMsg =
               `Entendido! Sua solicitação de cancelamento foi registrada. 📋\n\n` +
-              `Nossa equipe entrará em contato para confirmar. — Clínica São Lucas 🏥`
+              `Nossa equipe entrará em contato para confirmar. — ${clinicName} 🏥`
 
             await db.from('wa_messages').insert({
               session_id: session.id, direction: 'inbound', body: text, status: 'delivered',
@@ -329,7 +331,7 @@ export async function POST(req: NextRequest) {
             `✅ *Consulta confirmada!*\n\n` +
             `📅 ${dateStr} às ${timeStr}\n` +
             `👨‍⚕️ ${doctor?.name ?? ''} — ${doctor?.specialty ?? ''}\n\n` +
-            `Clínica São Lucas 🏥\nQualquer dúvida, estamos à disposição!`
+            `${clinicName} 🏥\nQualquer dúvida, estamos à disposição!`
 
           if (WA_TOKEN && WA_PHONE_ID) {
             const waRes = await fetch(`https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`, {

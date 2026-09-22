@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { getClinicBasicConfig } from '@/lib/clinic-config-server'
 
 const WA_TOKEN    = process.env.WHATSAPP_API_TOKEN
 const WA_PHONE_ID = process.env.WHATSAPP_PHONE_NUMBER_ID
@@ -46,6 +47,7 @@ export async function POST(req: NextRequest) {
     if (!id || !action) return NextResponse.json({ error: 'id e action são obrigatórios' }, { status: 400 })
 
     const db = createServerClient()
+    const { clinicName } = await getClinicBasicConfig()
 
     const { data: approval, error } = await db
       .from('approval_requests')
@@ -107,7 +109,7 @@ export async function POST(req: NextRequest) {
         `Olá, *${patientName}*!\n\n` +
         `Infelizmente o horário sugerido não está mais disponível. 😔\n\n` +
         `Nossa equipe está buscando outras opções e entrará em contato em breve.\n\n` +
-        `Ou se preferir, pode nos dizer qual especialidade e período prefere para agilizarmos! — Clínica São Lucas 🏥`
+        `Ou se preferir, pode nos dizer qual especialidade e período prefere para agilizarmos! — ${clinicName} 🏥`
       await notifyAndLog(db, approval.session_id, msg)
 
       return NextResponse.json({ ok: true, action: 'rejected' })
@@ -156,7 +158,7 @@ export async function POST(req: NextRequest) {
         `Olá, *${patientName}*! ✅\n\n` +
         `Sua consulta foi cancelada conforme solicitado.\n\n` +
         apptLine +
-        `Se precisar remarcar, é só nos chamar aqui no WhatsApp! — Clínica São Lucas 🏥`
+        `Se precisar remarcar, é só nos chamar aqui no WhatsApp! — ${clinicName} 🏥`
       await notifyAndLog(db, approval.session_id, msg)
 
       return NextResponse.json({ ok: true, action: 'confirm_cancel', cancelled_appointment_id: apptId })
@@ -177,10 +179,10 @@ export async function POST(req: NextRequest) {
       const msg = isAlteracao
         ? `Olá, *${patientName}*! 🗓\n\n` +
           `Confirmamos que sua consulta foi mantida no horário original.${apptInfo}\n` +
-          `Se quiser remarcar, é só nos dizer a data preferida! — Clínica São Lucas 🏥`
+          `Se quiser remarcar, é só nos dizer a data preferida! — ${clinicName} 🏥`
         : `Olá, *${patientName}*! 😊\n\n` +
           `Ótimo! Sua consulta foi mantida. Aguardamos sua presença!${apptInfo}\n` +
-          `Se precisar de algo mais, estamos aqui. — Clínica São Lucas 🏥`
+          `Se precisar de algo mais, estamos aqui. — ${clinicName} 🏥`
       await notifyAndLog(db, approval.session_id, msg)
 
       return NextResponse.json({ ok: true, action: 'keep_appointment' })
@@ -199,7 +201,7 @@ export async function POST(req: NextRequest) {
         msg =
           `Olá, *${patientName}*! 📞\n\n` +
           `Nossa equipe já está ciente da sua solicitação e entrará em contato com você em breve.\n\n` +
-          `Clínica São Lucas 🏥`
+          `${clinicName} 🏥`
       } else {
         const apptInfo = apptStr
           ? `\n📅 *${apptStr}*${doctorName ? `\n👨‍⚕️ ${doctorName}` : ''}\n`
@@ -207,7 +209,7 @@ export async function POST(req: NextRequest) {
         msg =
           `Olá, *${patientName}*! 🗓\n\n` +
           `Sua solicitação de remarcação foi processada. Nossa equipe verificará a disponibilidade e confirmará o novo horário em breve.${apptInfo}\n` +
-          `Clínica São Lucas 🏥`
+          `${clinicName} 🏥`
       }
       await notifyAndLog(db, approval.session_id, msg)
 
