@@ -25,7 +25,7 @@ export function useAppointments(dayOffset: number) {
         *,
         patient:patients(*),
         doctor:doctors(*),
-        history:appointment_history(*)
+        history:appointment_history!appointment_id(*)
       `)
       .gte('scheduled_at', start)
       .lte('scheduled_at', end)

@@ -13,7 +13,7 @@ export async function getAppointmentsByDay(date: Date): Promise<Appointment[]> {
       *,
       patient:patients(*),
       doctor:doctors(*),
-      history:appointment_history(*)
+      history:appointment_history!appointment_id(*)
     `)
     .gte('scheduled_at', start.toISOString())
     .lte('scheduled_at', end.toISOString())
