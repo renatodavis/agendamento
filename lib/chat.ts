@@ -181,7 +181,11 @@ async function consultarDisponibilidade(
     const tomorrow = new Date(); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1); tomorrow.setUTCHours(0, 0, 0, 0)
     const prefDate = input.preferred_date ? new Date(input.preferred_date + 'T00:00:00Z') : tomorrow
     const startDate = prefDate >= tomorrow ? prefDate : tomorrow
-    const endDate = new Date(startDate); endDate.setUTCDate(endDate.getUTCDate() + 90)
+    // When a specific date is requested, scan only that day; otherwise search up to 14 days
+    const specificDateRequested = !!input.preferred_date
+    const endDate = new Date(startDate)
+    endDate.setUTCDate(endDate.getUTCDate() + (specificDateRequested ? 0 : 14))
+    const MAX_SLOTS_NO_DATE = 10
     for (const doctor of matchingDoctors) {
       const { data: rawSchedules } = await db.from('doctor_schedules').select('day_of_week, start_time, end_time, slot_minutes').eq('doctor_id', doctor.id)
       const schedules = rawSchedules?.length
@@ -204,29 +208,33 @@ async function consultarDisponibilidade(
       }
       const schedMap = new Map(schedules.map(s => [s.day_of_week as number, s]))
       const cur = new Date(startDate)
-      while (cur <= endDate && allSlots.filter(s => s.doctor.id === doctor.id).length < 3) {
+      const doctorSlots = () => allSlots.filter(s => s.doctor.id === doctor.id)
+      while (cur <= endDate) {
+        // When no specific date: stop once we have enough slots
+        if (!specificDateRequested && doctorSlots().length >= MAX_SLOTS_NO_DATE) break
         const sched = schedMap.get(cur.getUTCDay())
         if (sched) {
           const [sh, sm] = (sched.start_time as string).split(':').map(Number)
-          const [eh] = (sched.end_time as string).split(':').map(Number)
+          const [eh, em] = (sched.end_time as string).split(':').map(Number)
           const slotMin = (sched.slot_minutes as number) ?? 60
           const slot = new Date(cur); slot.setUTCHours(sh, sm, 0, 0)
-          while (slot.getUTCHours() < eh && allSlots.filter(s => s.doctor.id === doctor.id).length < 3) {
+          const endMinutes = eh * 60 + em
+          while (slot.getUTCHours() * 60 + slot.getUTCMinutes() < endMinutes) {
             const slotDay = slot.toISOString().split('T')[0]
-            const slotHour = slot.getUTCHours()
+            const slotMin2 = slot.getUTCHours() * 60 + slot.getUTCMinutes()
             const isBooked = (existingAppts ?? []).some(a => {
               const ap = new Date(a.scheduled_at)
-              return ap.toISOString().split('T')[0] === slotDay && ap.getUTCHours() === slotHour
+              return ap.toISOString().split('T')[0] === slotDay &&
+                ap.getUTCHours() * 60 + ap.getUTCMinutes() === slotMin2
             })
             const isBlocked = (() => {
               const blocks = blockedMap.get(slotDay)
               if (!blocks) return false
               return blocks.some(b => {
-                if (!b.start_time || !b.end_time) return true // dia inteiro
+                if (!b.start_time || !b.end_time) return true
                 const [bsh, bsm] = b.start_time.split(':').map(Number)
                 const [beh, bem] = b.end_time.split(':').map(Number)
-                const slotMin = slot.getUTCHours() * 60 + slot.getUTCMinutes()
-                return slotMin >= bsh * 60 + bsm && slotMin < beh * 60 + bem
+                return slotMin2 >= bsh * 60 + bsm && slotMin2 < beh * 60 + bem
               })
             })()
             if (!isBooked && !isBlocked) allSlots.push({ doctor, slot: new Date(slot) })
@@ -238,10 +246,13 @@ async function consultarDisponibilidade(
     }
     if (!allSlots.length) {
       const names = matchingDoctors.map(d => d.name).join(', ')
-      return JSON.stringify({ error: true, message: `Nenhum horário disponível para ${input.specialty} nos próximos 90 dias (${names}). Tente contato direto com a recepção.` })
+      const horizon = specificDateRequested ? `em ${input.preferred_date}` : 'nos próximos 14 dias'
+      return JSON.stringify({ error: true, message: `Nenhum horário disponível para ${input.specialty} ${horizon} (${names}). Tente outra data ou contato direto com a recepção.` })
     }
     allSlots.sort((a, b) => a.slot.getTime() - b.slot.getTime())
-    const top = allSlots.slice(0, 5)
+    // Show more slots when a specific date was requested (patient wants full day view)
+    const displayLimit = specificDateRequested ? 20 : 5
+    const top = allSlots.slice(0, displayLimit)
     const formattedSlots = top.map((s, i) =>
       `${i + 1}. *${fmtDate(s.slot)}* às *${fmtTime(s.slot)}* — ${s.doctor.name} (${s.doctor.specialty})`
     ).join('\n')
