@@ -26,8 +26,10 @@ export async function GET(req: NextRequest) {
     .select(`
       id, scheduled_at,
       doctor:doctors(name, specialty),
-      patient:patients(name),
-      session:wa_sessions!inner(id, phone, patient_id)
+      patient:patients(
+        name,
+        sessions:wa_sessions(id, phone)
+      )
     `)
     .in('status', ['agendada', 'confirmada'])
     .is('reminder_sent_at', null)
@@ -43,9 +45,11 @@ export async function GET(req: NextRequest) {
   let failed = 0
 
   for (const appt of appointments ?? []) {
-    const session = appt.session as unknown as { id: string; phone: string; patient_id: string | null } | null
-    const doctor  = appt.doctor  as unknown as { name: string; specialty: string } | null
-    const patient = appt.patient as unknown as { name: string } | null
+    const doctor   = appt.doctor  as unknown as { name: string; specialty: string } | null
+    const patient  = appt.patient as unknown as { name: string; sessions: { id: string; phone: string }[] } | null
+    const sessions = patient?.sessions ?? []
+    // Pega a sessão com phone válido
+    const session  = sessions.find(s => s.phone) ?? null
 
     if (!session?.phone) continue
 
