@@ -187,9 +187,21 @@ async function consultarDisponibilidade(
       const schedules = rawSchedules?.length
         ? rawSchedules
         : [1, 2, 3, 4, 5].map(d => ({ day_of_week: d, start_time: '08:00', end_time: '17:00', slot_minutes: 60 }))
-      const { data: existingAppts } = await db.from('appointments').select('scheduled_at')
-        .eq('doctor_id', doctor.id).gte('scheduled_at', startDate.toISOString()).lte('scheduled_at', endDate.toISOString())
-        .not('status', 'in', '("cancelada","lista_espera")')
+      const [{ data: existingAppts }, { data: blockedSlots }] = await Promise.all([
+        db.from('appointments').select('scheduled_at')
+          .eq('doctor_id', doctor.id).gte('scheduled_at', startDate.toISOString()).lte('scheduled_at', endDate.toISOString())
+          .not('status', 'in', '("cancelada","lista_espera")'),
+        db.from('doctor_blocked_slots').select('blocked_date, start_time, end_time')
+          .eq('doctor_id', doctor.id)
+          .gte('blocked_date', startDate.toISOString().split('T')[0])
+          .lte('blocked_date', endDate.toISOString().split('T')[0]),
+      ])
+      const blockedMap = new Map<string, { start_time: string | null; end_time: string | null }[]>()
+      for (const b of blockedSlots ?? []) {
+        const key = b.blocked_date as string
+        if (!blockedMap.has(key)) blockedMap.set(key, [])
+        blockedMap.get(key)!.push({ start_time: b.start_time as string | null, end_time: b.end_time as string | null })
+      }
       const schedMap = new Map(schedules.map(s => [s.day_of_week as number, s]))
       const cur = new Date(startDate)
       while (cur <= endDate && allSlots.filter(s => s.doctor.id === doctor.id).length < 3) {
@@ -206,7 +218,18 @@ async function consultarDisponibilidade(
               const ap = new Date(a.scheduled_at)
               return ap.toISOString().split('T')[0] === slotDay && ap.getUTCHours() === slotHour
             })
-            if (!isBooked) allSlots.push({ doctor, slot: new Date(slot) })
+            const isBlocked = (() => {
+              const blocks = blockedMap.get(slotDay)
+              if (!blocks) return false
+              return blocks.some(b => {
+                if (!b.start_time || !b.end_time) return true // dia inteiro
+                const [bsh, bsm] = b.start_time.split(':').map(Number)
+                const [beh, bem] = b.end_time.split(':').map(Number)
+                const slotMin = slot.getUTCHours() * 60 + slot.getUTCMinutes()
+                return slotMin >= bsh * 60 + bsm && slotMin < beh * 60 + bem
+              })
+            })()
+            if (!isBooked && !isBlocked) allSlots.push({ doctor, slot: new Date(slot) })
             slot.setUTCMinutes(slot.getUTCMinutes() + slotMin)
           }
         }
