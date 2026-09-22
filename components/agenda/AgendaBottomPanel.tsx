@@ -5,6 +5,7 @@ import type { Appointment, AppointmentStatus, Doctor } from '@/types'
 import ApprovalPanel from './ApprovalPanel'
 import ClinicConfigPanel from '@/components/settings/ClinicConfigPanel'
 import DoctorSchedulesPanel from '@/components/settings/DoctorSchedulesPanel'
+import ContactsPanel from '@/components/contacts/ContactsPanel'
 import AgendaQueueView from './AgendaQueueView'
 
 const DOCTOR_COLORS = ['#3B9EFF', '#14C38E', '#F0A500', '#A78BFA', '#FB923C', '#F472B6', '#22D3EE', '#EF4444']
@@ -246,7 +247,7 @@ function ApptDetail({ appt, onAttend, onCancel, detailRef }: {
 
 // ── Main ──────────────────────────────────────────────────────────────
 export default function AgendaBottomPanel({ approvalCount = 0 }: { approvalCount?: number }) {
-  const [panelView, setPanelView]       = useState<'agenda' | 'approvals' | 'config' | 'schedules'>('agenda')
+  const [panelView, setPanelView]       = useState<'agenda' | 'approvals' | 'config' | 'schedules' | 'contacts'>('agenda')
   const [agendaView, setAgendaView]     = useState<'list' | 'queue'>('list')
   const [dayOffset, setDayOffset]       = useState(0)
   const [selId, setSelId]               = useState<string | null>(null)
@@ -356,6 +357,14 @@ export default function AgendaBottomPanel({ approvalCount = 0 }: { approvalCount
           }}>
           🗓 Agendas
         </button>
+        <button onClick={() => setPanelView('contacts')}
+          className="flex-none py-1.5 px-3 text-[11px] font-semibold border-b-2 transition-colors whitespace-nowrap"
+          style={{
+            borderColor: panelView === 'contacts' ? '#22D3EE' : 'transparent',
+            color: panelView === 'contacts' ? '#22D3EE' : 'var(--muted)',
+          }}>
+          👥 Contatos
+        </button>
       </div>
 
       {/* ── Approval panel ── */}
@@ -376,6 +385,13 @@ export default function AgendaBottomPanel({ approvalCount = 0 }: { approvalCount
       {panelView === 'schedules' && (
         <div className="flex-1 min-h-0 overflow-y-auto p-4">
           <DoctorSchedulesPanel />
+        </div>
+      )}
+
+      {/* ── Contacts panel ── */}
+      {panelView === 'contacts' && (
+        <div className="flex-1 min-h-0 flex flex-col">
+          <ContactsPanel />
         </div>
       )}
 
