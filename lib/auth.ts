@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createAuthClient } from './supabase'
+import { createAuthClient } from './supabase-server'
 
 // Verifica sessão em API routes protegidas.
 // Uso: const auth = await requireAuth(); if (auth instanceof NextResponse) return auth
