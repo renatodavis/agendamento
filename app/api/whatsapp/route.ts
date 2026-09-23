@@ -393,6 +393,37 @@ export async function POST(req: NextRequest) {
       history,
     })
 
+    // Defensive fallback: if message contains cancellation keywords and AI responded
+    // as if it escalated, ensure the approval_request actually exists in DB.
+    if (session?.id) {
+      const cancelKeyword = /cancelar|cancelamento|desmarcar/i.test(text)
+      const aiClaimedEscalation = /solicitação de cancelamento foi registrada|será contactado|entrará em contato/i.test(response ?? '')
+      if (cancelKeyword || aiClaimedEscalation) {
+        const { count } = await db.from('approval_requests')
+          .select('*', { count: 'exact', head: true })
+          .eq('session_id', session.id)
+          .eq('request_type', 'cancelamento')
+          .eq('status', 'pending')
+        if ((count ?? 0) === 0) {
+          const { data: sess2 } = await db.from('wa_sessions').select('patient_id').eq('id', session.id).single()
+          let patientName = contactName ?? phone
+          if (sess2?.patient_id) {
+            const { data: p } = await db.from('patients').select('name').eq('id', sess2.patient_id).single()
+            if (p?.name) patientName = p.name
+          }
+          await db.from('approval_requests').insert({
+            session_id: session.id,
+            patient_id: sess2?.patient_id ?? null,
+            patient_name: patientName,
+            request_type: 'cancelamento',
+            status: 'pending',
+            message_to_receptionist: `Paciente solicitou cancelamento via WhatsApp: "${text}"`,
+          })
+          console.log('[whatsapp/POST] fallback: approval_request de cancelamento criado para sessão', session.id)
+        }
+      }
+    }
+
     // Send reply via WhatsApp Cloud API
     if (response && WA_TOKEN && WA_PHONE_ID) {
       const waRes = await fetch(
