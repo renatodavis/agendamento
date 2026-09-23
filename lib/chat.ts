@@ -267,6 +267,144 @@ async function consultarDisponibilidade(
   }
 }
 
+async function remarcarConsulta(
+  db: SupabaseClient,
+  input: {
+    appointment_id?: string
+    specialty?: string
+    new_date: string   // YYYY-MM-DD
+    new_time: string   // HH:MM
+  },
+  sessionId: string | undefined
+): Promise<string> {
+  try {
+    // Resolve patient
+    let patientId: string | null = null
+    if (sessionId) {
+      const { data: sess } = await db.from('wa_sessions').select('patient_id').eq('id', sessionId).single()
+      patientId = sess?.patient_id ?? null
+    }
+    if (!patientId) return JSON.stringify({ error: true, message: 'Não foi possível identificar o paciente.' })
+
+    // Find appointment to reschedule
+    let apptId = input.appointment_id ?? null
+    let doctorId: string | null = null
+    let oldScheduledAt: string | null = null
+
+    if (!apptId) {
+      let query = db.from('appointments')
+        .select('id, scheduled_at, doctor_id, doctor:doctors(id, name, specialty)')
+        .eq('patient_id', patientId)
+        .not('status', 'in', '("cancelada","lista_espera")')
+        .gte('scheduled_at', new Date().toISOString())
+        .order('scheduled_at', { ascending: true })
+        .limit(1)
+
+      if (input.specialty) {
+        const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+        const { data: docs } = await db.from('doctors').select('id, specialty')
+        const matched = (docs ?? []).filter(d => {
+          const ds = norm(d.specialty); const ss = norm(input.specialty!)
+          return ds.includes(ss.slice(0, 5)) || ss.includes(ds.slice(0, 5))
+        })
+        if (matched.length > 0) {
+          query = db.from('appointments')
+            .select('id, scheduled_at, doctor_id, doctor:doctors(id, name, specialty)')
+            .eq('patient_id', patientId)
+            .in('doctor_id', matched.map(d => d.id))
+            .not('status', 'in', '("cancelada","lista_espera")')
+            .gte('scheduled_at', new Date().toISOString())
+            .order('scheduled_at', { ascending: true })
+            .limit(1)
+        }
+      }
+
+      const { data: appts } = await query
+      const appt = appts?.[0]
+      if (!appt) return JSON.stringify({ error: true, message: 'Nenhuma consulta futura encontrada para remarcar.' })
+      apptId = appt.id
+      doctorId = appt.doctor_id as string
+      oldScheduledAt = appt.scheduled_at as string
+    } else {
+      const { data: appt } = await db.from('appointments').select('id, scheduled_at, doctor_id').eq('id', apptId).single()
+      if (!appt) return JSON.stringify({ error: true, message: 'Consulta não encontrada.' })
+      doctorId = appt.doctor_id as string
+      oldScheduledAt = appt.scheduled_at as string
+    }
+
+    // Build new datetime
+    const timeMatch = input.new_time.trim().match(/^(\d{1,2})[h:](\d{0,2})$/)
+    const hh = timeMatch ? String(Number(timeMatch[1])).padStart(2, '0') : input.new_time.slice(0, 2)
+    const mm = timeMatch ? (timeMatch[2] || '00').padStart(2, '0') : '00'
+    const newDt = new Date(`${input.new_date}T${hh}:${mm}:00Z`)
+    if (isNaN(newDt.getTime())) return JSON.stringify({ error: true, message: `Data/hora inválida: ${input.new_date} ${input.new_time}` })
+
+    // Validate within doctor schedule
+    const dayOfWeek = newDt.getUTCDay()
+    const { data: sched } = await db.from('doctor_schedules')
+      .select('start_time, end_time')
+      .eq('doctor_id', doctorId)
+      .eq('day_of_week', dayOfWeek)
+      .single()
+    if (!sched) {
+      const dayNames = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado']
+      return JSON.stringify({ error: true, message: `O médico não atende às ${dayNames[dayOfWeek]}s.` })
+    }
+    const [sh, sm] = (sched.start_time as string).split(':').map(Number)
+    const [eh, em] = (sched.end_time as string).split(':').map(Number)
+    const reqMin = newDt.getUTCHours() * 60 + newDt.getUTCMinutes()
+    if (reqMin < sh * 60 + sm || reqMin >= eh * 60 + em) {
+      return JSON.stringify({ error: true, message: `O horário ${hh}:${mm} está fora do expediente do médico (${sched.start_time}–${sched.end_time}).` })
+    }
+
+    // Validate not blocked
+    const slotDate = input.new_date
+    const { data: blocked } = await db.from('doctor_blocked_slots')
+      .select('start_time, end_time')
+      .eq('doctor_id', doctorId)
+      .eq('blocked_date', slotDate)
+    const isBlocked = (blocked ?? []).some(b => {
+      if (!b.start_time || !b.end_time) return true
+      const [bsh, bsm] = (b.start_time as string).split(':').map(Number)
+      const [beh, bem] = (b.end_time as string).split(':').map(Number)
+      return reqMin >= bsh * 60 + bsm && reqMin < beh * 60 + bem
+    })
+    if (isBlocked) return JSON.stringify({ error: true, message: `O horário ${hh}:${mm} de ${slotDate} está bloqueado. Escolha outro horário.` })
+
+    // Validate not booked by another patient (exclude the appointment being moved)
+    const slotStart = new Date(newDt); slotStart.setUTCMinutes(0, 0, 0)
+    const slotEnd   = new Date(newDt); slotEnd.setUTCMinutes(59, 59, 999)
+    const { data: conflicts } = await db.from('appointments')
+      .select('id')
+      .eq('doctor_id', doctorId)
+      .gte('scheduled_at', slotStart.toISOString())
+      .lte('scheduled_at', slotEnd.toISOString())
+      .not('status', 'in', '("cancelada","lista_espera")')
+      .neq('id', apptId)   // exclude the appointment being rescheduled
+    if (conflicts && conflicts.length > 0) {
+      return JSON.stringify({ error: true, message: `O horário ${hh}:${mm} de ${slotDate} já está ocupado por outro paciente. Escolha outro horário.` })
+    }
+
+    // Update the appointment
+    const { error: updErr } = await db.from('appointments')
+      .update({ scheduled_at: newDt.toISOString(), status: 'agendada' })
+      .eq('id', apptId)
+    if (updErr) return JSON.stringify({ error: true, message: `Erro ao remarcar: ${updErr.message}` })
+
+    const { data: docRow } = await db.from('doctors').select('name, specialty').eq('id', doctorId).single()
+    return JSON.stringify({
+      ok: true,
+      appointment_id: apptId,
+      doctor_name: docRow?.name ?? '',
+      specialty: docRow?.specialty ?? '',
+      old_scheduled_at: oldScheduledAt,
+      new_scheduled_at: newDt.toISOString(),
+    })
+  } catch (err) {
+    return JSON.stringify({ error: true, message: `Erro interno: ${err instanceof Error ? err.message : 'desconhecido'}` })
+  }
+}
+
 async function escalarParaRecepcao(
   db: SupabaseClient,
   input: { request_type: 'cancelamento' | 'atendente' | 'alteracao_horario'; patient_name?: string; notes?: string; appointment_id?: string },
@@ -474,17 +612,25 @@ Se patient_conflict: true → apresente message exatamente
 - same_day + SIM → confirme segundo agendamento
 - same_day + DIFERENTE → peça nova data
 
+REMARCAÇÃO DE CONSULTA — FLUXO DIRETO (SEM ESCALAR):
+Quando o paciente quiser mudar o horário de uma consulta existente:
+1. Chame consultar_agendamentos para confirmar a consulta atual
+2. Pergunte a nova data e horário desejado
+3. Apresente resumo: "Confirma a remarcação de [data/hora atual] para [nova data/hora]? Responda *SIM* ou *NÃO*."
+4. Após SIM → chame remarcar_consulta com new_date e new_time
+5. Confirme ao paciente: "✅ Consulta remarcada para [nova data/hora]!"
+- Se remarcar_consulta retornar error → informe o paciente e ofereça outras opções (consultar_disponibilidade)
+- NUNCA chame escalar_para_recepcao para remarcação de horário
+
 ESCALAÇÃO PARA RECEPÇÃO — REGRA ABSOLUTA:
-Ao PRIMEIRO sinal de qualquer uma destas intenções — pedido OU pergunta — chame escalar_para_recepcao IMEDIATAMENTE (antes de responder qualquer texto):
-- Qualquer menção a "cancelar", "cancelamento", "desmarcar" → request_type: cancelamento
-- Qualquer menção a "falar com atendente", "recepcionista", "humano" → request_type: atendente
-- Qualquer menção a "remarcar", "alterar horário", "mudar data" → request_type: alteracao_horario
+Ao PRIMEIRO sinal de qualquer uma destas intenções — chame escalar_para_recepcao IMEDIATAMENTE:
+- "cancelar", "cancelamento", "desmarcar" → request_type: cancelamento
+- "falar com atendente", "recepcionista", "humano" → request_type: atendente
 
 EXEMPLOS QUE DEVEM DISPARAR escalar_para_recepcao:
 - "consegue cancelar?" → escalar cancelamento
 - "como faço para cancelar?" → escalar cancelamento
 - "quero cancelar" → escalar cancelamento
-- "posso remarcar?" → escalar alteracao_horario
 
 NUNCA responda "Sua solicitação de cancelamento foi registrada" sem ter chamado escalar_para_recepcao nesta mesma resposta.
 
@@ -496,7 +642,6 @@ REGRA CRÍTICA — NUNCA ASSUMA ESTADO DE APROVAÇÃO ANTERIOR:
 Após escalar_para_recepcao:
 - cancelamento → "Sua solicitação de cancelamento foi registrada. Nossa equipe entrará em contato em breve. ✅"
 - atendente → "Registrei sua solicitação. Um atendente da ${clinicName} entrará em contato em breve. 📞"
-- alteracao_horario → "Sua solicitação de remarcação foi registrada. Nossa equipe verificará a disponibilidade em breve. 🗓"
 
 Contexto regulatório: LGPD Art.11 (dados de saúde = dados sensíveis), CFM 2.314/2022 (sigilo médico).` }
 
@@ -536,10 +681,20 @@ const TOOLS: Anthropic.Tool[] = [
     }, required: ['symptoms'] },
   },
   {
-    name: 'escalar_para_recepcao',
-    description: 'Encaminha uma solicitação para a recepção: cancelamento, atendente humano ou alteração de horário.',
+    name: 'remarcar_consulta',
+    description: 'Remarca (altera o horário de) uma consulta existente do paciente para uma nova data/hora. Usar quando o paciente quiser mudar o horário de uma consulta já agendada.',
     input_schema: { type: 'object' as const, properties: {
-      request_type:   { type: 'string', enum: ['cancelamento', 'atendente', 'alteracao_horario'], description: 'Tipo da solicitação' },
+      appointment_id: { type: 'string', description: 'ID da consulta a remarcar (opcional — se não informado, usa a próxima consulta futura do paciente)' },
+      specialty:      { type: 'string', description: 'Especialidade da consulta a remarcar, se houver mais de uma futura (opcional)' },
+      new_date:       { type: 'string', description: 'Nova data no formato YYYY-MM-DD' },
+      new_time:       { type: 'string', description: 'Novo horário, ex: "15:00", "15h", "14h30"' },
+    }, required: ['new_date', 'new_time'] },
+  },
+  {
+    name: 'escalar_para_recepcao',
+    description: 'Encaminha uma solicitação para a recepção: cancelamento ou atendente humano. NÃO usar para alteração de horário — use remarcar_consulta.',
+    input_schema: { type: 'object' as const, properties: {
+      request_type:   { type: 'string', enum: ['cancelamento', 'atendente'], description: 'Tipo da solicitação' },
       patient_name:   { type: 'string', description: 'Nome do paciente se conhecido' },
       notes:          { type: 'string', description: 'Observações adicionais' },
       appointment_id: { type: 'string', description: 'ID do agendamento relacionado, se aplicável' },
@@ -639,8 +794,10 @@ export async function processMessage(params: {
       content = await consultarDisponibilidade(db, { specialty, preferred_date })
     } else if (t.name === 'verificar_urgencia') {
       content = JSON.stringify({ urgencia: true, encaminhar: 'pronto-socorro' })
+    } else if (t.name === 'remarcar_consulta') {
+      content = await remarcarConsulta(db, t.input as { appointment_id?: string; specialty?: string; new_date: string; new_time: string }, sessionId)
     } else if (t.name === 'escalar_para_recepcao') {
-      content = await escalarParaRecepcao(db, t.input as { request_type: 'cancelamento' | 'atendente' | 'alteracao_horario'; patient_name?: string; notes?: string; appointment_id?: string }, sessionId)
+      content = await escalarParaRecepcao(db, t.input as { request_type: 'cancelamento' | 'atendente'; patient_name?: string; notes?: string; appointment_id?: string }, sessionId)
     }
     totalToolCallCount++
     trace?.span({ name: `tool:${t.name}`, input: t.input, output: content, startTime: new Date(toolStart), endTime: new Date(), metadata: { tool_index: totalToolCallCount } })
