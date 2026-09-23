@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from 'crypto'
 import { createServerClient } from '@/lib/supabase'
 import { processMessage } from '@/lib/chat'
 import { getClinicBasicConfig } from '@/lib/clinic-config-server'
+import { maybeCreateApprovalIntercept } from '@/lib/approval-intercept'
 
 // Meta WhatsApp Business Cloud API webhook
 // Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks
@@ -386,66 +387,8 @@ export async function POST(req: NextRequest) {
       ...(wamid ? { wamid } : {}),
     })
 
-    // ── Pre-AI keyword intercept: cancelamento / alteracao_horario ──────────────
-    // Garante o approval_request ANTES de chamar o AI, independente do comportamento do modelo.
-    if (session?.id && text) {
-      const CANCEL_RE     = /\b(cancelar|cancelamento|desmarcar|cancela)\b/i
-      const RESCHEDULE_RE = /\b(remarcar|remarca[çc][aã]o|alterar\s+hor[aá]rio|mudar\s+hor[aá]rio|mudar\s+data|trocar\s+hor[aá]rio)\b/i
-      const ATTENDANT_RE  = /\b(atendente|recepcionista|recep[çc][aã]o|humano|pessoa|falar\s+com\s+algu[eé]m|quero\s+ser\s+atendido|falar\s+com\s+atendente|falar\s+com\s+recepcionista)\b/i
-      const wantCancel     = CANCEL_RE.test(text)
-      const wantReschedule = !wantCancel && RESCHEDULE_RE.test(text)
-      const wantAttendant  = !wantCancel && !wantReschedule && ATTENDANT_RE.test(text)
-
-      if (wantCancel || wantReschedule || wantAttendant) {
-        const reqType: 'cancelamento' | 'alteracao_horario' | 'atendente' =
-          wantCancel ? 'cancelamento' : wantReschedule ? 'alteracao_horario' : 'atendente'
-
-        // Dedup: não criar se já existe um pending criado nos últimos 2 minutos
-        const recentCutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString()
-        const { count: recentCount } = await db.from('approval_requests')
-          .select('*', { count: 'exact', head: true })
-          .eq('session_id', session.id)
-          .eq('request_type', reqType)
-          .eq('status', 'pending')
-          .gte('created_at', recentCutoff)
-
-        if ((recentCount ?? 0) === 0) {
-          const { data: sessData } = await db.from('wa_sessions').select('patient_id').eq('id', session.id).single()
-          const patientId = sessData?.patient_id ?? null
-          let patientName = contactName ?? phone
-          if (patientId) {
-            const { data: p } = await db.from('patients').select('name').eq('id', patientId).single()
-            if (p?.name) patientName = p.name
-          }
-          // Busca a próxima consulta ativa para incluir detalhes no card
-          let apptDetails: Record<string, unknown> | null = null
-          if (patientId) {
-            const { data: appts } = await db.from('appointments')
-              .select('id, scheduled_at, status, doctor:doctors(id, name, specialty)')
-              .eq('patient_id', patientId)
-              .not('status', 'in', '("cancelada","lista_espera")')
-              .gte('scheduled_at', new Date().toISOString())
-              .order('scheduled_at', { ascending: true })
-              .limit(1)
-            const appt = appts?.[0]
-            if (appt) {
-              const doc = appt.doctor as unknown as { id: string; name: string; specialty: string } | null
-              apptDetails = { appointment_id: appt.id, scheduled_at: appt.scheduled_at, doctor_name: doc?.name, doctor_specialty: doc?.specialty }
-            }
-          }
-          await db.from('approval_requests').insert({
-            session_id: session.id,
-            patient_id: patientId,
-            patient_name: patientName,
-            request_type: reqType,
-            status: 'pending',
-            message_to_receptionist: text,
-            details: apptDetails,
-          })
-          console.log(`[whatsapp/POST] approval_request "${reqType}" criado (keyword intercept) para sessão`, session.id)
-        }
-      }
-    }
+    // ── Pre-AI keyword intercept (shared with /api/chat) ────────────────────────
+    await maybeCreateApprovalIntercept({ text, sessionId: session?.id, contactName, phone })
     // ── end keyword intercept ──
 
     // R2: Chama a lógica de chat diretamente (sem HTTP interno)
