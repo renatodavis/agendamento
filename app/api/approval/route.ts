@@ -3,6 +3,26 @@ import { createServerClient } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 import { getClinicBasicConfig } from '@/lib/clinic-config-server'
 
+// ── GET: lista approval_requests pendentes (service role bypassa RLS) ──
+export async function GET(req: NextRequest) {
+  const auth = await requireAuth()
+  if (auth instanceof NextResponse) return auth
+
+  const db = createServerClient()
+  const { data, error } = await db
+    .from('approval_requests')
+    .select('*, doctor:doctors(name, specialty)')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true })
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json(data ?? [])
+}
+
+// ── GET (count): usado pelo badge ─────────────────────────────────────
+// /api/approval?count=1
+// Mantido no mesmo handler acima via query param — veja ApprovalPanel.
+
 const WA_TOKEN    = process.env.WHATSAPP_API_TOKEN
 const WA_PHONE_ID = process.env.WHATSAPP_PHONE_NUMBER_ID
 

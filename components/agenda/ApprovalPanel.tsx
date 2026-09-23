@@ -1,7 +1,9 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@supabase/supabase-js'
 
+// Supabase client — usado APENAS para Realtime (dispara re-fetch via API).
+// A leitura de dados vai para /api/approval (service role, bypassa RLS).
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -36,7 +38,6 @@ const TYPE_CONFIG: Record<RequestType, {
   color: string
   bg: string
   border: string
-  emptyAction: string
 }> = {
   disponibilidade: {
     label: 'Sugestão de horário',
@@ -44,7 +45,6 @@ const TYPE_CONFIG: Record<RequestType, {
     color: '#F0A500',
     bg: '#F0A50018',
     border: '#F0A500',
-    emptyAction: '',
   },
   cancelamento: {
     label: 'Cancelamento',
@@ -52,7 +52,6 @@ const TYPE_CONFIG: Record<RequestType, {
     color: '#EF4444',
     bg: '#EF444412',
     border: '#EF4444',
-    emptyAction: '',
   },
   atendente: {
     label: 'Falar com atendente',
@@ -60,7 +59,6 @@ const TYPE_CONFIG: Record<RequestType, {
     color: '#3B82F6',
     bg: '#3B82F612',
     border: '#3B82F6',
-    emptyAction: '',
   },
   alteracao_horario: {
     label: 'Alteração de horário',
@@ -68,7 +66,6 @@ const TYPE_CONFIG: Record<RequestType, {
     color: '#8B5CF6',
     bg: '#8B5CF612',
     border: '#8B5CF6',
-    emptyAction: '',
   },
 }
 
@@ -84,29 +81,32 @@ export default function ApprovalPanel() {
   const [requests, setRequests] = useState<ApprovalRequest[]>([])
   const [busy, setBusy]         = useState<Record<string, boolean>>({})
 
-  useEffect(() => {
-    load()
-    const ch = supabase
-      .channel('approval-panel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_requests' }, load)
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch('/api/approval')
+      if (!res.ok) return
+      const data: ApprovalRequest[] = await res.json()
+      setRequests(
+        data.map(r => ({
+          ...r,
+          request_type: (r.request_type ?? 'disponibilidade') as RequestType,
+          doctor: r.doctor as unknown as { name: string; specialty: string } | null,
+        }))
+      )
+    } catch {
+      // silencioso — não quebrar a UI
+    }
   }, [])
 
-  async function load() {
-    const { data } = await supabase
-      .from('approval_requests')
-      .select('*, doctor:doctors(name, specialty)')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: true })
-    setRequests(
-      (data ?? []).map(r => ({
-        ...r,
-        request_type: (r.request_type ?? 'disponibilidade') as RequestType,
-        doctor: r.doctor as unknown as { name: string; specialty: string } | null,
-      }))
-    )
-  }
+  useEffect(() => {
+    load()
+    // Realtime apenas para disparar re-fetch via API (não lê dados diretamente)
+    const ch = supabase
+      .channel('approval-panel')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_requests' }, () => load())
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [load])
 
   async function act(id: string, action: string, body?: Record<string, unknown>) {
     setBusy(p => ({ ...p, [id]: true }))
@@ -145,7 +145,7 @@ export default function ApprovalPanel() {
           <div key={req.id} className="rounded-lg border flex flex-col gap-2 overflow-hidden"
             style={{ background: 'var(--card)', borderColor: cfg.border }}>
 
-            {/* Colored top bar */}
+            {/* Header */}
             <div className="px-3 pt-2.5 pb-0 flex items-center justify-between gap-2">
               <div>
                 <div className="text-[12px] font-bold leading-tight">{req.patient_name ?? 'Paciente'}</div>
@@ -161,7 +161,7 @@ export default function ApprovalPanel() {
               </span>
             </div>
 
-            {/* Appointment details block — for all types that have appointment data */}
+            {/* Appointment details */}
             {(() => {
               const slotIso = req.request_type === 'disponibilidade'
                 ? req.suggested_at
@@ -175,9 +175,7 @@ export default function ApprovalPanel() {
                   style={{ background: 'var(--panel)' }}>
                   <span className="text-base">📅</span>
                   <div>
-                    {date && (
-                      <div className="text-[11px] font-semibold">{date} às {time}</div>
-                    )}
+                    {date && <div className="text-[11px] font-semibold">{date} às {time}</div>}
                     {doctorName && (
                       <div className="text-[10px]" style={{ color: 'var(--muted)' }}>
                         {doctorName}{doctorSpec ? ` · ${doctorSpec}` : ''}
@@ -191,10 +189,11 @@ export default function ApprovalPanel() {
               )
             })()}
 
-            {/* Patient note / message to receptionist */}
-            {req.message_to_receptionist && req.message_to_receptionist !== 'Cancelamento de consulta'
-              && req.message_to_receptionist !== 'Solicitação de atendimento humano'
-              && req.message_to_receptionist !== 'Alteração de horário' && (
+            {/* Patient message */}
+            {req.message_to_receptionist &&
+              req.message_to_receptionist !== 'Cancelamento de consulta' &&
+              req.message_to_receptionist !== 'Solicitação de atendimento humano' &&
+              req.message_to_receptionist !== 'Alteração de horário' && (
               <div className="mx-3 px-2.5 py-1.5 rounded-md text-[10px] italic"
                 style={{ background: 'var(--panel)', color: 'var(--muted)', borderLeft: `2px solid ${cfg.border}` }}>
                 "{req.message_to_receptionist}"
@@ -211,7 +210,7 @@ export default function ApprovalPanel() {
               </details>
             )}
 
-            {/* Actions — vary by type */}
+            {/* Actions */}
             <div className="flex gap-1.5 px-3 pb-2.5">
               {req.request_type === 'disponibilidade' && (
                 <>
@@ -277,23 +276,29 @@ export default function ApprovalPanel() {
   )
 }
 
-// Export hook for badge count
+// Badge count — também via API para bypassar RLS
 export function useApprovalCount() {
   const [count, setCount] = useState(0)
-  useEffect(() => {
-    const load = async () => {
-      const { count: c } = await supabase
-        .from('approval_requests')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending')
-      setCount(c ?? 0)
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch('/api/approval')
+      if (!res.ok) return
+      const data: unknown[] = await res.json()
+      setCount(Array.isArray(data) ? data.length : 0)
+    } catch {
+      // silencioso
     }
+  }, [])
+
+  useEffect(() => {
     load()
     const ch = supabase
       .channel('approval-count')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_requests' }, load)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_requests' }, () => load())
       .subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [])
+  }, [load])
+
   return count
 }
