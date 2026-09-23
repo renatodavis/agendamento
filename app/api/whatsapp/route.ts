@@ -366,6 +366,22 @@ export async function POST(req: NextRequest) {
     }
     // ── end HITL intercept ──
 
+    // ── Auto-resolve alteracao_horario ao receber SIM/NÃO do paciente ───────────
+    // Quando o paciente confirma ou recusa um reagendamento proposto pelo bot,
+    // o card some de Aprovações — a recepção não precisa agir manualmente.
+    if (session?.id && text) {
+      const isConfirmation = /^(sim|s|yes|1|confirmo|ok|n[aã]o|n|no|2|cancelar)$/i.test(text.trim())
+      if (isConfirmation) {
+        const now = new Date().toISOString()
+        await db.from('approval_requests')
+          .update({ status: 'resolved', reviewed_at: now, reviewed_by: 'patient' })
+          .eq('session_id', session.id)
+          .eq('request_type', 'alteracao_horario')
+          .eq('status', 'pending')
+      }
+    }
+    // ── end auto-resolve ──
+
     // Carrega histórico ANTES de inserir a mensagem atual (evita duplicata no contexto)
     const { data: historyMsgs } = await db
       .from('wa_messages')
