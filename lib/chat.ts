@@ -407,7 +407,7 @@ async function remarcarConsulta(
 
 async function escalarParaRecepcao(
   db: SupabaseClient,
-  input: { request_type: 'cancelamento' | 'atendente' | 'alteracao_horario'; patient_name?: string; notes?: string; appointment_id?: string },
+  input: { request_type: 'cancelamento' | 'atendente' | 'alteracao_horario'; patient_name?: string; notes?: string; appointment_id?: string; new_scheduled_at?: string },
   sessionId: string | undefined
 ): Promise<string> {
   try {
@@ -434,7 +434,7 @@ async function escalarParaRecepcao(
       if (appt) {
         const doc = appt.doctor as unknown as { id: string; name: string; specialty: string } | null
         doctorId = doc?.id ?? null
-        appointmentDetails = { appointment_id: appt.id, scheduled_at: appt.scheduled_at, appointment_status: appt.status, doctor_name: doc?.name, doctor_specialty: doc?.specialty }
+        appointmentDetails = { appointment_id: appt.id, scheduled_at: appt.scheduled_at, appointment_status: appt.status, doctor_name: doc?.name, doctor_specialty: doc?.specialty, new_scheduled_at: input.new_scheduled_at ?? null }
       }
     } else if (patientId) {
       const { data: appts } = await db.from('appointments')
@@ -445,7 +445,7 @@ async function escalarParaRecepcao(
       if (appt) {
         const doc = appt.doctor as unknown as { id: string; name: string; specialty: string } | null
         doctorId = doc?.id ?? null
-        appointmentDetails = { appointment_id: appt.id, scheduled_at: appt.scheduled_at, appointment_status: appt.status, doctor_name: doc?.name, doctor_specialty: doc?.specialty }
+        appointmentDetails = { appointment_id: appt.id, scheduled_at: appt.scheduled_at, appointment_status: appt.status, doctor_name: doc?.name, doctor_specialty: doc?.specialty, new_scheduled_at: input.new_scheduled_at ?? null }
       }
     }
     const { data: req, error } = await db.from('approval_requests').insert({
@@ -612,25 +612,28 @@ Se patient_conflict: true → apresente message exatamente
 - same_day + SIM → confirme segundo agendamento
 - same_day + DIFERENTE → peça nova data
 
-REMARCAÇÃO DE CONSULTA — FLUXO DIRETO (SEM ESCALAR):
+REMARCAÇÃO DE CONSULTA — FLUXO COM APROVAÇÃO DA RECEPÇÃO:
 Quando o paciente quiser mudar o horário de uma consulta existente:
 1. Chame consultar_agendamentos para confirmar a consulta atual
 2. Pergunte a nova data e horário desejado
 3. Apresente resumo: "Confirma a remarcação de [data/hora atual] para [nova data/hora]? Responda *SIM* ou *NÃO*."
-4. Após SIM → chame remarcar_consulta com new_date e new_time
-5. Confirme ao paciente: "✅ Consulta remarcada para [nova data/hora]!"
-- Se remarcar_consulta retornar error → informe o paciente e ofereça outras opções (consultar_disponibilidade)
-- NUNCA chame escalar_para_recepcao para remarcação de horário
+4. Após SIM → chame escalar_para_recepcao com:
+   - request_type: "alteracao_horario"
+   - new_scheduled_at: novo horário no formato ISO 8601 (ex: "2026-09-25T15:00:00Z")
+   - appointment_id: ID da consulta atual (se disponível)
+5. Responda ao paciente: "Sua solicitação de remarcação foi registrada. Nossa equipe confirmará o novo horário em breve. 🗓"
 
 ESCALAÇÃO PARA RECEPÇÃO — REGRA ABSOLUTA:
 Ao PRIMEIRO sinal de qualquer uma destas intenções — chame escalar_para_recepcao IMEDIATAMENTE:
 - "cancelar", "cancelamento", "desmarcar" → request_type: cancelamento
 - "falar com atendente", "recepcionista", "humano" → request_type: atendente
+- "remarcar", "alterar horário", "mudar data", "trocar horário" → request_type: alteracao_horario (com new_scheduled_at quando souber)
 
 EXEMPLOS QUE DEVEM DISPARAR escalar_para_recepcao:
 - "consegue cancelar?" → escalar cancelamento
 - "como faço para cancelar?" → escalar cancelamento
 - "quero cancelar" → escalar cancelamento
+- "posso remarcar?" → coletar novo horário primeiro, depois escalar alteracao_horario com new_scheduled_at
 
 NUNCA responda "Sua solicitação de cancelamento foi registrada" sem ter chamado escalar_para_recepcao nesta mesma resposta.
 
@@ -642,6 +645,7 @@ REGRA CRÍTICA — NUNCA ASSUMA ESTADO DE APROVAÇÃO ANTERIOR:
 Após escalar_para_recepcao:
 - cancelamento → "Sua solicitação de cancelamento foi registrada. Nossa equipe entrará em contato em breve. ✅"
 - atendente → "Registrei sua solicitação. Um atendente da ${clinicName} entrará em contato em breve. 📞"
+- alteracao_horario → "Sua solicitação de remarcação foi registrada. Nossa equipe confirmará o novo horário em breve. 🗓"
 
 Contexto regulatório: LGPD Art.11 (dados de saúde = dados sensíveis), CFM 2.314/2022 (sigilo médico).` }
 
@@ -692,12 +696,13 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'escalar_para_recepcao',
-    description: 'Encaminha uma solicitação para a recepção: cancelamento ou atendente humano. NÃO usar para alteração de horário — use remarcar_consulta.',
+    description: 'Encaminha uma solicitação para a recepção: cancelamento, atendente humano ou alteração de horário.',
     input_schema: { type: 'object' as const, properties: {
-      request_type:   { type: 'string', enum: ['cancelamento', 'atendente'], description: 'Tipo da solicitação' },
-      patient_name:   { type: 'string', description: 'Nome do paciente se conhecido' },
-      notes:          { type: 'string', description: 'Observações adicionais' },
-      appointment_id: { type: 'string', description: 'ID do agendamento relacionado, se aplicável' },
+      request_type:      { type: 'string', enum: ['cancelamento', 'atendente', 'alteracao_horario'], description: 'Tipo da solicitação' },
+      patient_name:      { type: 'string', description: 'Nome do paciente se conhecido' },
+      notes:             { type: 'string', description: 'Observações adicionais' },
+      appointment_id:    { type: 'string', description: 'ID do agendamento relacionado, se aplicável' },
+      new_scheduled_at:  { type: 'string', description: 'Para alteracao_horario: novo horário desejado pelo paciente no formato ISO 8601 (YYYY-MM-DDTHH:MM:00Z)' },
     }, required: ['request_type'] },
   },
 ]
@@ -797,7 +802,7 @@ export async function processMessage(params: {
     } else if (t.name === 'remarcar_consulta') {
       content = await remarcarConsulta(db, t.input as { appointment_id?: string; specialty?: string; new_date: string; new_time: string }, sessionId)
     } else if (t.name === 'escalar_para_recepcao') {
-      content = await escalarParaRecepcao(db, t.input as { request_type: 'cancelamento' | 'atendente'; patient_name?: string; notes?: string; appointment_id?: string }, sessionId)
+      content = await escalarParaRecepcao(db, t.input as { request_type: 'cancelamento' | 'atendente' | 'alteracao_horario'; patient_name?: string; notes?: string; appointment_id?: string; new_scheduled_at?: string }, sessionId)
     }
     totalToolCallCount++
     trace?.span({ name: `tool:${t.name}`, input: t.input, output: content, startTime: new Date(toolStart), endTime: new Date(), metadata: { tool_index: totalToolCallCount } })

@@ -14,6 +14,7 @@ type RequestType = 'disponibilidade' | 'cancelamento' | 'atendente' | 'alteracao
 type ApptDetails = {
   appointment_id?: string
   scheduled_at?: string
+  new_scheduled_at?: string
   doctor_name?: string
   doctor_specialty?: string
   appointment_status?: string
@@ -163,28 +164,49 @@ export default function ApprovalPanel() {
 
             {/* Appointment details */}
             {(() => {
-              const slotIso = req.request_type === 'disponibilidade'
-                ? req.suggested_at
-                : req.details?.scheduled_at ?? null
+              const slotIso    = req.request_type === 'disponibilidade' ? req.suggested_at : req.details?.scheduled_at ?? null
+              const newSlotIso = req.request_type === 'alteracao_horario' ? (req.details?.new_scheduled_at ?? null) : null
               const doctorName = req.doctor?.name ?? req.details?.doctor_name
               const doctorSpec = req.doctor?.specialty ?? req.details?.doctor_specialty
-              if (!slotIso && !doctorName) return null
-              const { date, time } = slotIso ? fmtSlot(slotIso) : { date: null, time: null }
+              if (!slotIso && !newSlotIso && !doctorName) return null
+              const old_ = slotIso ? fmtSlot(slotIso) : null
+              const new_ = newSlotIso ? fmtSlot(newSlotIso) : null
               return (
-                <div className="mx-3 px-2.5 py-2 rounded-md flex items-center gap-2"
+                <div className="mx-3 px-2.5 py-2 rounded-md flex flex-col gap-1"
                   style={{ background: 'var(--panel)' }}>
-                  <span className="text-base">📅</span>
-                  <div>
-                    {date && <div className="text-[11px] font-semibold">{date} às {time}</div>}
-                    {doctorName && (
-                      <div className="text-[10px]" style={{ color: 'var(--muted)' }}>
-                        {doctorName}{doctorSpec ? ` · ${doctorSpec}` : ''}
+                  {old_ && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{new_ ? '🕐' : '📅'}</span>
+                      <div>
+                        <div className="text-[11px] font-semibold" style={{ color: new_ ? 'var(--muted)' : undefined }}>
+                          {new_ ? <s>{old_.date} às {old_.time}</s> : `${old_.date} às ${old_.time}`}
+                        </div>
+                        {doctorName && !new_ && (
+                          <div className="text-[10px]" style={{ color: 'var(--muted)' }}>
+                            {doctorName}{doctorSpec ? ` · ${doctorSpec}` : ''}
+                          </div>
+                        )}
+                        {req.request_type === 'disponibilidade' && (
+                          <div className="text-[9px]" style={{ color: 'var(--muted)' }}>horário sugerido pelo sistema</div>
+                        )}
                       </div>
-                    )}
-                    {req.request_type === 'disponibilidade' && (
-                      <div className="text-[9px]" style={{ color: 'var(--muted)' }}>horário sugerido pelo sistema</div>
-                    )}
-                  </div>
+                    </div>
+                  )}
+                  {new_ && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">📅</span>
+                      <div>
+                        <div className="text-[11px] font-semibold" style={{ color: '#14C38E' }}>
+                          {new_.date} às {new_.time}
+                        </div>
+                        {doctorName && (
+                          <div className="text-[10px]" style={{ color: 'var(--muted)' }}>
+                            {doctorName}{doctorSpec ? ` · ${doctorSpec}` : ''} · novo horário solicitado
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })()}

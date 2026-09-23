@@ -1,16 +1,15 @@
 import { createServerClient } from '@/lib/supabase'
 
-const CANCEL_RE    = /\b(cancelar|cancelamento|desmarcar|cancela)\b/i
-const ATTENDANT_RE = /\b(atendente|recepcionista|recep[çc][aã]o|humano|pessoa|falar\s+com\s+algu[eé]m|quero\s+ser\s+atendido|falar\s+com\s+atendente|falar\s+com\s+recepcionista)\b/i
+const CANCEL_RE     = /\b(cancelar|cancelamento|desmarcar|cancela)\b/i
+const RESCHEDULE_RE = /\b(remarcar|remarca[çc][aã]o|alterar\s+hor[aá]rio|mudar\s+hor[aá]rio|mudar\s+data|trocar\s+hor[aá]rio)\b/i
+const ATTENDANT_RE  = /\b(atendente|recepcionista|recep[çc][aã]o|humano|pessoa|falar\s+com\s+algu[eé]m|quero\s+ser\s+atendido|falar\s+com\s+atendente|falar\s+com\s+recepcionista)\b/i
 
-// Nota: remarcar/alterar horário NÃO é interceptado aqui — o bot resolve
-// diretamente via ferramenta remarcar_consulta sem passar pela recepção.
-
-export type EscalationType = 'cancelamento' | 'atendente'
+export type EscalationType = 'cancelamento' | 'alteracao_horario' | 'atendente'
 
 function detectType(text: string): EscalationType | null {
-  if (CANCEL_RE.test(text))    return 'cancelamento'
-  if (ATTENDANT_RE.test(text)) return 'atendente'
+  if (CANCEL_RE.test(text))     return 'cancelamento'
+  if (RESCHEDULE_RE.test(text)) return 'alteracao_horario'
+  if (ATTENDANT_RE.test(text))  return 'atendente'
   return null
 }
 

@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     const now = new Date().toISOString()
 
     // Helper: format appointment details from details jsonb or doctor join
-    type ApptDetails = { appointment_id?: string; scheduled_at?: string; doctor_name?: string; doctor_specialty?: string }
+    type ApptDetails = { appointment_id?: string; scheduled_at?: string; doctor_name?: string; doctor_specialty?: string; new_scheduled_at?: string }
     const det = approval.details as ApptDetails | null
     const doc = approval.doctor as unknown as { name: string; specialty: string } | null
     const doctorName = doc?.name ?? det?.doctor_name ?? null
@@ -208,32 +208,64 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, action: 'keep_appointment' })
     }
 
-    // ── atendente / alteracao_horario: resolve ────────────────────────────────
-    if (action === 'resolve') {
+    // ── atendente: resolve ────────────────────────────────────────────────────
+    if (action === 'resolve' && approval.request_type === 'atendente') {
       await db.from('approval_requests').update({
-        status: 'resolved',
-        reviewed_at: now,
-        reviewed_by: 'receptionist',
+        status: 'resolved', reviewed_at: now, reviewed_by: 'receptionist',
+      }).eq('id', id)
+
+      const msg =
+        `Olá, *${patientName}*! 📞\n\n` +
+        `Nossa equipe já está ciente da sua solicitação e entrará em contato com você em breve.\n\n` +
+        `${clinicName} 🏥`
+      await notifyAndLog(db, approval.session_id, msg)
+      return NextResponse.json({ ok: true, action: 'resolve' })
+    }
+
+    // ── alteracao_horario: confirm_reschedule ─────────────────────────────────
+    if (action === 'resolve' && approval.request_type === 'alteracao_horario') {
+      const newIso   = det?.new_scheduled_at ?? null
+      const apptId   = det?.appointment_id ?? null
+
+      // Atualiza o agendamento se tiver o novo horário e o appointment_id
+      let rescheduled = false
+      if (newIso && apptId) {
+        const { error: updErr } = await db.from('appointments')
+          .update({ scheduled_at: newIso, status: 'agendada' })
+          .eq('id', apptId)
+        if (updErr) {
+          console.error('[approval resolve] falha ao remarcar appointment:', updErr)
+        } else {
+          rescheduled = true
+        }
+      }
+
+      await db.from('approval_requests').update({
+        status: 'resolved', reviewed_at: now, reviewed_by: 'receptionist',
       }).eq('id', id)
 
       let msg: string
-      if (approval.request_type === 'atendente') {
+      if (rescheduled && newIso) {
+        const d = new Date(newIso)
+        const newDate = d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })
+        const newTime = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
         msg =
-          `Olá, *${patientName}*! 📞\n\n` +
-          `Nossa equipe já está ciente da sua solicitação e entrará em contato com você em breve.\n\n` +
-          `${clinicName} 🏥`
+          `Olá, *${patientName}*! ✅\n\n` +
+          `Sua consulta foi remarcada com sucesso!\n\n` +
+          `📅 *${newDate} às ${newTime}*\n` +
+          (doctorName ? `👨‍⚕️ ${doctorName}${doctorSpec ? ` (${doctorSpec})` : ''}\n\n` : '\n') +
+          `Até lá! — ${clinicName} 🏥`
       } else {
         const apptInfo = apptStr
           ? `\n📅 *${apptStr}*${doctorName ? `\n👨‍⚕️ ${doctorName}` : ''}\n`
           : ''
         msg =
           `Olá, *${patientName}*! 🗓\n\n` +
-          `Sua solicitação de remarcação foi processada. Nossa equipe verificará a disponibilidade e confirmará o novo horário em breve.${apptInfo}\n` +
+          `Sua solicitação de remarcação foi processada. Nossa equipe entrará em contato para confirmar o novo horário.${apptInfo}\n` +
           `${clinicName} 🏥`
       }
       await notifyAndLog(db, approval.session_id, msg)
-
-      return NextResponse.json({ ok: true, action: 'resolve' })
+      return NextResponse.json({ ok: true, action: 'resolve', rescheduled })
     }
 
     return NextResponse.json({ error: 'Ação inválida.' }, { status: 400 })
