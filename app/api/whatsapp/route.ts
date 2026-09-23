@@ -391,11 +391,14 @@ export async function POST(req: NextRequest) {
     if (session?.id && text) {
       const CANCEL_RE     = /\b(cancelar|cancelamento|desmarcar|cancela)\b/i
       const RESCHEDULE_RE = /\b(remarcar|remarca[çc][aã]o|alterar\s+hor[aá]rio|mudar\s+hor[aá]rio|mudar\s+data|trocar\s+hor[aá]rio)\b/i
+      const ATTENDANT_RE  = /\b(atendente|recepcionista|recep[çc][aã]o|humano|pessoa|falar\s+com\s+algu[eé]m|quero\s+ser\s+atendido|falar\s+com\s+atendente|falar\s+com\s+recepcionista)\b/i
       const wantCancel     = CANCEL_RE.test(text)
-      const wantReschedule = RESCHEDULE_RE.test(text)
+      const wantReschedule = !wantCancel && RESCHEDULE_RE.test(text)
+      const wantAttendant  = !wantCancel && !wantReschedule && ATTENDANT_RE.test(text)
 
-      if (wantCancel || wantReschedule) {
-        const reqType: 'cancelamento' | 'alteracao_horario' = wantCancel ? 'cancelamento' : 'alteracao_horario'
+      if (wantCancel || wantReschedule || wantAttendant) {
+        const reqType: 'cancelamento' | 'alteracao_horario' | 'atendente' =
+          wantCancel ? 'cancelamento' : wantReschedule ? 'alteracao_horario' : 'atendente'
 
         // Dedup: não criar se já existe um pending criado nos últimos 2 minutos
         const recentCutoff = new Date(Date.now() - 2 * 60 * 1000).toISOString()
