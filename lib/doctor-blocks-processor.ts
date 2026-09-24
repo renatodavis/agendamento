@@ -58,7 +58,7 @@ export async function processBlockAffectedAppointments(block: BlockedSlot): Prom
 
   let created = 0
   for (const appt of appointments) {
-    const patient = appt.patient as { id: string; name: string } | null
+    const patient = appt.patient as unknown as { id: string; name: string } | null
     const origDate = new Date(appt.scheduled_at)
     const preferredHour = origDate.getUTCHours()
     const preferredMin = origDate.getUTCMinutes()
