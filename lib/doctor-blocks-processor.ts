@@ -25,7 +25,7 @@ export async function processBlockAffectedAppointments(block: BlockedSlot): Prom
     .from('appointments')
     .select('id, scheduled_at, patient_id, patient:patients(id, name)')
     .eq('doctor_id', block.doctor_id)
-    .not('status', 'in', '("cancelada","lista_espera","realizada")')
+    .not('status', 'in', '("cancelada","lista_espera","atendida")')
     .gte('scheduled_at', `${block.blocked_date}T00:00:00`)
     .lte('scheduled_at', `${block.blocked_date}T23:59:59`)
 
