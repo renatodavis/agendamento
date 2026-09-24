@@ -625,6 +625,12 @@ Se patient_conflict: true → apresente message exatamente
 - same_day + SIM → confirme segundo agendamento
 - same_day + DIFERENTE → peça nova data
 
+FLUXO DE REAGENDAMENTO FORÇADO (resposta do paciente ao aviso de imprevisto):
+Se no histórico houver uma mensagem anterior do assistente informando cancelamento por imprevisto/bloqueio do médico com sugestão de novo horário (identificado por frases como "imprevisto", "cancelada", "Sugerimos um novo horário"):
+- Se o paciente responder *SIM* (ou "sim", "confirmo", "ok", "pode ser", "tá bom") → chame agendar_consulta IMEDIATAMENTE com a data/hora e especialidade que estão na mensagem anterior, sem pedir confirmação adicional — o paciente já confirmou
+- Se o paciente responder *NÃO* (ou "não", "outra data", "prefiro outro") → chame consultar_disponibilidade para a especialidade mencionada e ofereça alternativas
+- Neste contexto NÃO aplique o fluxo SIM/NÃO normal — o paciente já respondeu à pergunta de confirmação
+
 REMARCAÇÃO DE CONSULTA — FLUXO COM APROVAÇÃO DA RECEPÇÃO:
 Quando o paciente quiser mudar o horário de uma consulta existente:
 1. Chame consultar_agendamentos para confirmar a consulta atual
