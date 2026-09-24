@@ -9,15 +9,17 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 
-type RequestType = 'disponibilidade' | 'cancelamento' | 'atendente' | 'alteracao_horario'
+type RequestType = 'disponibilidade' | 'cancelamento' | 'atendente' | 'alteracao_horario' | 'reagendamento_forcado'
 
 type ApptDetails = {
   appointment_id?: string
   scheduled_at?: string
   new_scheduled_at?: string
+  suggested_new_at?: string
   doctor_name?: string
   doctor_specialty?: string
   appointment_status?: string
+  block_reason?: string
 }
 
 type ApprovalRequest = {
@@ -67,6 +69,13 @@ const TYPE_CONFIG: Record<RequestType, {
     color: '#8B5CF6',
     bg: '#8B5CF612',
     border: '#8B5CF6',
+  },
+  reagendamento_forcado: {
+    label: 'Reagendamento forçado',
+    icon: '⚠️',
+    color: '#F97316',
+    bg: '#F9731612',
+    border: '#F97316',
   },
 }
 
@@ -165,7 +174,11 @@ export default function ApprovalPanel() {
             {/* Appointment details */}
             {(() => {
               const slotIso    = req.request_type === 'disponibilidade' ? req.suggested_at : req.details?.scheduled_at ?? null
-              const newSlotIso = req.request_type === 'alteracao_horario' ? (req.details?.new_scheduled_at ?? null) : null
+              const newSlotIso = req.request_type === 'alteracao_horario'
+                ? (req.details?.new_scheduled_at ?? null)
+                : req.request_type === 'reagendamento_forcado'
+                  ? (req.details?.suggested_new_at ?? null)
+                  : null
               const doctorName = req.doctor?.name ?? req.details?.doctor_name
               const doctorSpec = req.doctor?.specialty ?? req.details?.doctor_specialty
               if (!slotIso && !newSlotIso && !doctorName) return null
@@ -201,7 +214,8 @@ export default function ApprovalPanel() {
                         </div>
                         {doctorName && (
                           <div className="text-[10px]" style={{ color: 'var(--muted)' }}>
-                            {doctorName}{doctorSpec ? ` · ${doctorSpec}` : ''} · novo horário solicitado
+                            {doctorName}{doctorSpec ? ` · ${doctorSpec}` : ''} ·{' '}
+                            {req.request_type === 'reagendamento_forcado' ? 'horário sugerido' : 'novo horário solicitado'}
                           </div>
                         )}
                       </div>
@@ -215,10 +229,19 @@ export default function ApprovalPanel() {
             {req.message_to_receptionist &&
               req.message_to_receptionist !== 'Cancelamento de consulta' &&
               req.message_to_receptionist !== 'Solicitação de atendimento humano' &&
-              req.message_to_receptionist !== 'Alteração de horário' && (
+              req.message_to_receptionist !== 'Alteração de horário' &&
+              req.request_type !== 'reagendamento_forcado' && (
               <div className="mx-3 px-2.5 py-1.5 rounded-md text-[10px] italic"
                 style={{ background: 'var(--panel)', color: 'var(--muted)', borderLeft: `2px solid ${cfg.border}` }}>
                 "{req.message_to_receptionist}"
+              </div>
+            )}
+
+            {/* Block reason — only for reagendamento_forcado */}
+            {req.request_type === 'reagendamento_forcado' && req.details?.block_reason && (
+              <div className="mx-3 px-2.5 py-1.5 rounded-md text-[10px] italic"
+                style={{ background: 'var(--panel)', color: 'var(--muted)', borderLeft: '2px solid #F97316' }}>
+                Motivo: "{req.details.block_reason}"
               </div>
             )}
 
@@ -283,6 +306,21 @@ export default function ApprovalPanel() {
                     className="flex-1 py-1.5 text-[11px] font-semibold rounded-md border transition-all disabled:opacity-40"
                     style={{ color: 'var(--muted)', borderColor: 'var(--border)', background: 'var(--panel)' }}>
                     {isLoading ? '…' : 'Manter Horário'}
+                  </button>
+                </>
+              )}
+
+              {req.request_type === 'reagendamento_forcado' && (
+                <>
+                  <button disabled={isLoading} onClick={() => act(req.id, 'confirm_forced_reschedule')}
+                    className="flex-1 py-1.5 text-[11px] font-semibold rounded-md border transition-all disabled:opacity-40"
+                    style={{ color: '#F97316', borderColor: '#F97316', background: '#F9731612' }}>
+                    {isLoading ? '…' : '⚠️ Confirmar e Notificar'}
+                  </button>
+                  <button disabled={isLoading} onClick={() => act(req.id, 'cancel_forced')}
+                    className="flex-1 py-1.5 text-[11px] font-semibold rounded-md border transition-all disabled:opacity-40"
+                    style={{ color: 'var(--red)', borderColor: 'var(--red)', background: '#EF444412' }}>
+                    {isLoading ? '…' : '🚫 Cancelar Consulta'}
                   </button>
                 </>
               )}

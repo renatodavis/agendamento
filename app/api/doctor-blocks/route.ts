@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
+import { processBlockAffectedAppointments } from '@/lib/doctor-blocks-processor'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -38,6 +39,17 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Background: find affected appointments and create approval_requests
+  processBlockAffectedAppointments({
+    id: data.id,
+    doctor_id,
+    blocked_date,
+    start_time: start_time || null,
+    end_time: end_time || null,
+    reason: reason || null,
+  }).catch(err => console.error('[doctor-blocks] processBlockAffectedAppointments error:', err))
+
   return NextResponse.json(data, { status: 201 })
 }
 
