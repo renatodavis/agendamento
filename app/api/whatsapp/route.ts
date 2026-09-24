@@ -389,10 +389,21 @@ export async function POST(req: NextRequest) {
       .eq('session_id', session?.id)
       .order('sent_at', { ascending: false })
       .limit(20)
-    const history = (historyMsgs ?? []).reverse().map(m => ({
-      role: m.direction === 'inbound' ? 'user' : 'assistant',
-      content: m.body,
-    }))
+
+    // Filtra mensagens com body vazio/null (Anthropic rejeita content vazio)
+    // e colapsa mensagens consecutivas do mesmo role (Anthropic exige alternância)
+    const rawHistory = (historyMsgs ?? []).reverse()
+      .filter(m => m.body && (m.body as string).trim().length > 0)
+      .map(m => ({ role: m.direction === 'inbound' ? 'user' : 'assistant', content: m.body as string }))
+    const history: { role: string; content: string }[] = []
+    for (const msg of rawHistory) {
+      if (history.length > 0 && history[history.length - 1].role === msg.role) {
+        // Mescla mensagens consecutivas do mesmo role
+        history[history.length - 1].content += '\n' + msg.content
+      } else {
+        history.push(msg)
+      }
+    }
 
     // Store inbound message (wamid gravado para deduplicação de retentativas)
     await db.from('wa_messages').insert({

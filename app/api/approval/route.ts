@@ -268,7 +268,16 @@ export async function POST(req: NextRequest) {
         await notifyAndLog(db, approval.session_id, msg)
       } else if (approval.patient_id) {
         const { data: pat } = await db.from('patients').select('phone').eq('id', approval.patient_id).single()
-        if (pat?.phone) await sendWhatsApp(pat.phone, msg)
+        if (pat?.phone) {
+          await sendWhatsApp(pat.phone, msg)
+          // Salva em wa_messages para que o bot tenha contexto na próxima resposta do paciente
+          const { data: sess } = await db.from('wa_sessions').select('id').eq('phone', pat.phone).single()
+          if (sess?.id) {
+            await db.from('wa_messages').insert({
+              session_id: sess.id, direction: 'outbound', body: msg, status: 'sent',
+            })
+          }
+        }
       }
       return NextResponse.json({ ok: true, action: 'confirm_forced_reschedule' })
     }
