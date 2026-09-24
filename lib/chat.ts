@@ -13,6 +13,7 @@ type AgendamentoInput = {
   patient_name?: string
   preferred_time?: string
   lista_espera?: boolean
+  convenio?: string   // ex: "Unimed", "SulAmérica", "Particular"
 }
 
 type ServiceConfig = { name: string; description: string }
@@ -63,6 +64,11 @@ async function executarAgendamento(
       patientId = newPatient?.id ?? null
     }
     if (!patientId) return 'Não foi possível identificar o paciente. Informe o nome completo.'
+
+    // Atualiza convênio do paciente se informado
+    if (patientId && input.convenio) {
+      await db.from('patients').update({ convenio: input.convenio }).eq('id', patientId)
+    }
 
     const { lista_espera, preferred_time } = input
     const datePart = preferred_date ?? new Date().toISOString().split('T')[0]
@@ -585,9 +591,16 @@ FONTE OFICIAL DE DADOS (REGRA ABSOLUTA):
 FLUXO OBRIGATÓRIO DE CONFIRMAÇÃO (SIM/NÃO):
 Para QUALQUER ação — agendar, cancelar ou remarcar — você DEVE seguir este fluxo:
 1. Coletar todas as informações necessárias (especialidade, data, nome do paciente)
-2. Apresentar um resumo claro da ação e perguntar: "Confirma? Responda *SIM* para confirmar ou *NÃO* para cancelar."
-3. Somente após receber *SIM* do paciente → chamar a ferramenta correspondente
-4. Se o paciente responder *NÃO* → cancelar a ação e perguntar como pode ajudar
+2. Perguntar o convênio/plano de saúde se ainda não souber (ex: "Possui convênio? Qual o plano?")
+3. Apresentar um resumo claro da ação e perguntar: "Confirma? Responda *SIM* para confirmar ou *NÃO* para cancelar."
+4. Somente após receber *SIM* do paciente → chamar a ferramenta correspondente com o campo convenio preenchido
+5. Se o paciente responder *NÃO* → cancelar a ação e perguntar como pode ajudar
+
+CONVÊNIO:
+- SEMPRE pergunte o convênio antes de agendar se não souber
+- Se o paciente mencionar um plano (Unimed, SulAmérica, Bradesco Saúde, Amil, etc.) → use esse valor em convenio
+- Se não tiver plano → convenio: "Particular"
+- Inclua o convênio no resumo de confirmação: "🏥 Convênio: Unimed"
 
 VERIFICAÇÃO DE AGENDA EXISTENTE (obrigatório):
 - SEMPRE que o paciente perguntar sobre consultas, agenda, horários marcados ou quiser agendar → chame consultar_agendamentos PRIMEIRO
@@ -659,6 +672,7 @@ const TOOLS: Anthropic.Tool[] = [
       preferred_time: { type: 'string', description: 'Horário desejado pelo paciente, ex: "09:00", "9h", "14h30".' },
       patient_name:   { type: 'string', description: 'Nome completo do paciente' },
       lista_espera:   { type: 'boolean', description: 'true = entrar na fila de espera mesmo que o horário esteja ocupado' },
+      convenio:       { type: 'string', description: 'Convênio/plano de saúde do paciente, ex: "Unimed", "SulAmérica", "Bradesco Saúde". Usar "Particular" se não tiver convênio.' },
     }, required: ['specialty', 'preferred_date', 'patient_name'] },
   },
   {
