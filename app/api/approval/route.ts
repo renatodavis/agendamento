@@ -222,76 +222,39 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, action: 'resolve' })
     }
 
-    // ── reagendamento_forcado: receptionist confirms → update appt + notify patient ──
+    // ── reagendamento_forcado: recepção aprova → envia sugestão ao paciente ──
+    // O agendamento já foi cancelado ao criar o bloqueio; aqui só notifica.
     if (action === 'confirm_forced_reschedule') {
       type ForcedDetails = { appointment_id?: string; scheduled_at?: string; suggested_new_at?: string; doctor_name?: string; doctor_specialty?: string; block_reason?: string }
       const fd = approval.details as ForcedDetails | null
-      const apptId   = fd?.appointment_id ?? null
       const newIso   = fd?.suggested_new_at ?? null
       const fdocName = fd?.doctor_name ?? doctorName
       const fdocSpec = fd?.doctor_specialty ?? doctorSpec
-
-      let rescheduled = false
-      if (apptId && newIso) {
-        const { error: updErr } = await db.from('appointments')
-          .update({ scheduled_at: newIso, status: 'agendada' })
-          .eq('id', apptId)
-        if (updErr) {
-          console.error('[approval confirm_forced_reschedule] update error:', updErr)
-        } else {
-          rescheduled = true
-        }
-      }
 
       await db.from('approval_requests').update({
         status: 'resolved', reviewed_at: now, reviewed_by: 'receptionist',
       }).eq('id', id)
 
       let msg: string
-      if (rescheduled && newIso) {
+      if (newIso) {
         const d = new Date(newIso)
         const newDate = d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })
         const newTime = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
         msg =
-          `Olá, *${patientName}*! 📅\n\n` +
-          `Informamos que houve um imprevisto e sua consulta precisou ser remarcada.\n\n` +
-          `✅ *Novo horário:*\n` +
+          `Olá, *${patientName}*! 😔\n\n` +
+          `Informamos que houve um imprevisto e sua consulta precisou ser cancelada.\n\n` +
+          `Sugerimos um novo horário para reagendamento:\n` +
           `📅 *${newDate} às ${newTime}*\n` +
           (fdocName ? `👨‍⚕️ ${fdocName}${fdocSpec ? ` (${fdocSpec})` : ''}\n\n` : '\n') +
-          `Pedimos desculpas pelo transtorno. Se não puder comparecer neste horário, nos avise! — ${clinicName} 🏥`
+          `Se esse horário for conveniente, é só confirmar! Caso contrário, nos diga sua preferência. Pedimos desculpas pelo transtorno. — ${clinicName} 🏥`
       } else {
         msg =
-          `Olá, *${patientName}*! 📅\n\n` +
-          `Informamos que houve um imprevisto e sua consulta precisou ser remarcada.\n\n` +
-          `Nossa equipe entrará em contato em breve para confirmar o novo horário. Pedimos desculpas pelo transtorno. — ${clinicName} 🏥`
+          `Olá, *${patientName}*! 😔\n\n` +
+          `Informamos que houve um imprevisto e sua consulta precisou ser cancelada.\n\n` +
+          `Por favor, entre em contato para reagendar em uma data de sua preferência. Pedimos desculpas pelo transtorno. — ${clinicName} 🏥`
       }
       await notifyAndLog(db, approval.session_id, msg)
-      return NextResponse.json({ ok: true, action: 'confirm_forced_reschedule', rescheduled })
-    }
-
-    // ── reagendamento_forcado: receptionist cancels the appointment instead ──
-    if (action === 'cancel_forced') {
-      type ForcedDetails = { appointment_id?: string; scheduled_at?: string }
-      const fd = approval.details as ForcedDetails | null
-      const apptId = fd?.appointment_id ?? null
-
-      if (apptId) {
-        await db.from('appointments').update({
-          status: 'cancelada',
-          cancel_reason: 'Cancelada por bloqueio de agenda do médico',
-        }).eq('id', apptId)
-      }
-
-      await db.from('approval_requests').update({
-        status: 'resolved', reviewed_at: now, reviewed_by: 'receptionist',
-      }).eq('id', id)
-
-      const msg =
-        `Olá, *${patientName}*! 😔\n\n` +
-        `Lamentamos informar que sua consulta${apptStr ? ` de *${apptStr}*` : ''} precisou ser cancelada devido a um imprevisto na agenda.\n\n` +
-        `Por favor, entre em contato para reagendar em uma data de sua preferência. — ${clinicName} 🏥`
-      await notifyAndLog(db, approval.session_id, msg)
-      return NextResponse.json({ ok: true, action: 'cancel_forced', cancelled_appointment_id: apptId })
+      return NextResponse.json({ ok: true, action: 'confirm_forced_reschedule' })
     }
 
     // ── alteracao_horario: confirm_reschedule ─────────────────────────────────

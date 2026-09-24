@@ -71,7 +71,7 @@ const TYPE_CONFIG: Record<RequestType, {
     border: '#8B5CF6',
   },
   reagendamento_forcado: {
-    label: 'Reagendamento forçado',
+    label: 'Consulta cancelada · sugerir novo horário',
     icon: '⚠️',
     color: '#F97316',
     bg: '#F9731612',
@@ -311,18 +311,11 @@ export default function ApprovalPanel() {
               )}
 
               {req.request_type === 'reagendamento_forcado' && (
-                <>
-                  <button disabled={isLoading} onClick={() => act(req.id, 'confirm_forced_reschedule')}
-                    className="flex-1 py-1.5 text-[11px] font-semibold rounded-md border transition-all disabled:opacity-40"
-                    style={{ color: '#F97316', borderColor: '#F97316', background: '#F9731612' }}>
-                    {isLoading ? '…' : '⚠️ Confirmar e Notificar'}
-                  </button>
-                  <button disabled={isLoading} onClick={() => act(req.id, 'cancel_forced')}
-                    className="flex-1 py-1.5 text-[11px] font-semibold rounded-md border transition-all disabled:opacity-40"
-                    style={{ color: 'var(--red)', borderColor: 'var(--red)', background: '#EF444412' }}>
-                    {isLoading ? '…' : '🚫 Cancelar Consulta'}
-                  </button>
-                </>
+                <button disabled={isLoading} onClick={() => act(req.id, 'confirm_forced_reschedule')}
+                  className="flex-1 py-1.5 text-[11px] font-semibold rounded-md border transition-all disabled:opacity-40"
+                  style={{ color: '#F97316', borderColor: '#F97316', background: '#F9731612' }}>
+                  {isLoading ? '…' : '📩 Enviar Sugestão ao Paciente'}
+                </button>
               )}
             </div>
 
