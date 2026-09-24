@@ -263,7 +263,13 @@ export async function POST(req: NextRequest) {
           `Informamos que houve um imprevisto e sua consulta precisou ser cancelada.\n\n` +
           `Por favor, entre em contato para reagendar em uma data de sua preferência. Pedimos desculpas pelo transtorno. — ${clinicName} 🏥`
       }
-      await notifyAndLog(db, approval.session_id, msg)
+      // Se não há session_id (paciente cadastrado pelo admin), busca telefone direto em patients
+      if (approval.session_id) {
+        await notifyAndLog(db, approval.session_id, msg)
+      } else if (approval.patient_id) {
+        const { data: pat } = await db.from('patients').select('phone').eq('id', approval.patient_id).single()
+        if (pat?.phone) await sendWhatsApp(pat.phone, msg)
+      }
       return NextResponse.json({ ok: true, action: 'confirm_forced_reschedule' })
     }
 
