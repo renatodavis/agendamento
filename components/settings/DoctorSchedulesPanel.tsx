@@ -369,14 +369,6 @@ function DoctorCard({ doc, onSaved, onDeleted }: { doc: Doctor; onSaved: () => v
           {/* Tab: Bloqueios */}
           {tab === 'bloqueios' && <BlocksSection doctorId={doc.id} />}
 
-          {/* Excluir médico */}
-          <div style={{ marginTop: 14, paddingTop: 10, borderTop: '1px dashed var(--border)' }}>
-            {deleteErr && <div style={{ fontSize: 11, color: '#EF4444', marginBottom: 6 }}>{deleteErr}</div>}
-            <button onClick={deleteDoctor} disabled={deleting}
-              style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 7, border: '1px solid #EF444440', background: '#EF444410', color: '#EF4444', cursor: 'pointer' }}>
-              {deleting ? 'Excluindo…' : '🗑 Excluir médico'}
-            </button>
-          </div>
         </div>
       )}
     </div>

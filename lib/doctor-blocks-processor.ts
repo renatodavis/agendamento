@@ -41,6 +41,7 @@ export async function processBlockAffectedAppointments(block: BlockedSlot): Prom
     console.error('[blocks-processor] error fetching appointments:', error)
     return 0
   }
+  console.log(`[blocks-processor] bloqueio ${block.id} — encontrados ${appointments?.length ?? 0} agendamento(s) em ${block.blocked_date}`)
   if (!appointments?.length) return 0
 
   // 2. Doctor info
@@ -67,11 +68,25 @@ export async function processBlockAffectedAppointments(block: BlockedSlot): Prom
       ? await findNearestSlot(db, block.doctor_id, block.blocked_date, preferredHour, preferredMin, schedules)
       : null
 
+    // Busca session_id pelo patient_id para poder enviar WhatsApp na aprovação
+    let sessionId: string | null = null
+    if (appt.patient_id) {
+      const { data: session } = await db
+        .from('wa_sessions')
+        .select('id')
+        .eq('patient_id', appt.patient_id)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .single()
+      sessionId = session?.id ?? null
+    }
+
     // Cria approval_request para a recepção revisar antes de cancelar e notificar
-    await db.from('approval_requests').insert({
+    const { error: insertErr } = await db.from('approval_requests').insert({
       patient_id: appt.patient_id,
       patient_name: patient?.name ?? 'Paciente',
       doctor_id: block.doctor_id,
+      session_id: sessionId,
       request_type: 'reagendamento_forcado',
       status: 'pending',
       message_to_receptionist:
@@ -87,6 +102,10 @@ export async function processBlockAffectedAppointments(block: BlockedSlot): Prom
         block_reason: block.reason ?? null,
       },
     })
+    if (insertErr) {
+      console.error('[blocks-processor] falha ao criar approval_request:', insertErr)
+      continue
+    }
     created++
   }
 
