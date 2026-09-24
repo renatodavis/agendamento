@@ -731,37 +731,21 @@ function detectWorkflow(msg: string): string {
   return 'agendamento'
 }
 
-function simulatedResponse(workflow: string): string {
-  switch (workflow) {
-    case 'urgencia':
-      return '⚠️ Seus sintomas precisam de atenção imediata.\n\nPor favor, dirija-se ao pronto-socorro mais próximo ou ligue para o SAMU (192).'
-    case 'cadastro':
-      return 'Bem-vindo à Clínica São Lucas! Para realizar seu cadastro, precisarei de nome completo, CPF, data de nascimento, telefone e convênio (ou particular).\n\nPode me informar seu nome completo para começar?'
-    default:
-      return 'Olá! Sou o assistente virtual da Clínica São Lucas. Posso ajudar com:\n\n• 📅 Agendamento de consultas\n• 🚨 Triagem de urgências\n• 📋 Cadastro de novos pacientes\n\nComo posso ajudar?'
-  }
-}
-
 // ── processMessage — entrada pública ─────────────────────────────────
 
 export type ProcessMessageResult = {
   response: string
   workflow: string
   tokens?: { input: number; output: number }
-  simulated?: boolean
 }
 
 export async function processMessage(params: {
   message: string
   sessionId?: string
   history?: { role: string; content: string }[]
-  simulate?: boolean
 }): Promise<ProcessMessageResult> {
-  const { message, sessionId, history, simulate: simFlag } = params
-  const simulate = simFlag === true || !process.env.ANTHROPIC_API_KEY?.trim()
+  const { message, sessionId, history } = params
   const workflow = detectWorkflow(message)
-
-  if (simulate) return { response: simulatedResponse(workflow), workflow, simulated: true }
 
   const db = createServerClient()
   const clinicCfg = await loadClinicConfig(db)
@@ -852,5 +836,5 @@ export async function processMessage(params: {
     action: 'chat_response', record_type: 'wa_message', record_id: sessionId ?? 'anonymous',
   })
 
-  return { response, workflow, tokens: { input: totalInputTokens, output: totalOutputTokens }, simulated: false }
+  return { response, workflow, tokens: { input: totalInputTokens, output: totalOutputTokens } }
 }

@@ -80,7 +80,6 @@ export default function WaPanel({ onPipelineChange, onLog, onStats }: Props) {
   const [view, setView]                   = useState<'list' | 'conv'>('list')
   const [input, setInput]                 = useState('')
   const [loading, setLoading]             = useState(false)
-  const [simMode, setSimMode]             = useState(false)
   const [botEnabled, setBotEnabled]       = useState(true)
   const bottomRef                         = useRef<HTMLDivElement>(null)
   const activeSessionRef                  = useRef<Session | null>(null)
@@ -195,7 +194,7 @@ export default function WaPanel({ onPipelineChange, onLog, onStats }: Props) {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: trimmed, sessionId: activeSession.id, simulate: simMode, history }),
+        body: JSON.stringify({ message: trimmed, sessionId: activeSession.id, history }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Erro')
@@ -239,11 +238,6 @@ export default function WaPanel({ onPipelineChange, onLog, onStats }: Props) {
               {sessions.length} conversa{sessions.length !== 1 ? 's' : ''}
             </div>
           </div>
-          <a href="/testemensagem" target="_blank"
-            className="text-[10px] font-semibold px-2 py-0.5 rounded-md"
-            style={{ background: 'rgba(255,255,255,0.2)', color: '#fff' }}>
-            + Sim
-          </a>
         </div>
       ) : (
         <div className="flex items-center gap-2 px-2 py-2 shrink-0" style={{ background: 'var(--green)', minHeight: 50 }}>
@@ -264,26 +258,15 @@ export default function WaPanel({ onPipelineChange, onLog, onStats }: Props) {
               </div>
             )}
           </div>
-          <div className="flex flex-col gap-0.5">
-            <label className="flex items-center gap-1 cursor-pointer">
-              <span className="text-[8px] font-semibold text-white opacity-80">{botEnabled ? 'BOT' : 'OFF'}</span>
-              <div className="relative w-6 h-3">
-                <input type="checkbox" className="sr-only" checked={botEnabled} onChange={e => setBotEnabled(e.target.checked)} />
-                <div className="w-6 h-3 rounded-full" style={{ background: botEnabled ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)' }} />
-                <div className="absolute top-0.5 w-2 h-2 rounded-full bg-white transition-transform"
-                  style={{ transform: botEnabled ? 'translateX(12px)' : 'translateX(1px)' }} />
-              </div>
-            </label>
-            <label className="flex items-center gap-1 cursor-pointer">
-              <span className="text-[8px] font-semibold text-white opacity-80">{simMode ? 'SIM' : 'API'}</span>
-              <div className="relative w-6 h-3">
-                <input type="checkbox" className="sr-only" checked={simMode} onChange={e => setSimMode(e.target.checked)} />
-                <div className="w-6 h-3 rounded-full" style={{ background: simMode ? 'rgba(255,165,0,0.6)' : 'rgba(59,158,255,0.6)' }} />
-                <div className="absolute top-0.5 w-2 h-2 rounded-full bg-white transition-transform"
-                  style={{ transform: simMode ? 'translateX(1px)' : 'translateX(12px)' }} />
-              </div>
-            </label>
-          </div>
+          <label className="flex items-center gap-1 cursor-pointer">
+            <span className="text-[8px] font-semibold text-white opacity-80">{botEnabled ? 'BOT' : 'OFF'}</span>
+            <div className="relative w-6 h-3">
+              <input type="checkbox" className="sr-only" checked={botEnabled} onChange={e => setBotEnabled(e.target.checked)} />
+              <div className="w-6 h-3 rounded-full" style={{ background: botEnabled ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)' }} />
+              <div className="absolute top-0.5 w-2 h-2 rounded-full bg-white transition-transform"
+                style={{ transform: botEnabled ? 'translateX(12px)' : 'translateX(1px)' }} />
+            </div>
+          </label>
         </div>
       )}
 
@@ -297,11 +280,6 @@ export default function WaPanel({ onPipelineChange, onLog, onStats }: Props) {
               <p className="text-[11px] leading-relaxed" style={{ color: 'var(--muted)' }}>
                 Nenhuma conversa ainda.<br />Use o simulador para testar.
               </p>
-              <a href="/testemensagem" target="_blank"
-                className="text-[11px] font-semibold px-3 py-1.5 rounded-full"
-                style={{ background: 'var(--green)', color: '#fff' }}>
-                Abrir Simulador →
-              </a>
             </div>
           ) : sessions.map(session => (
             <button key={session.id} onClick={() => openSession(session)}

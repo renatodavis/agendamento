@@ -5,7 +5,7 @@ import { createServerClient } from '@/lib/supabase'
 
 export async function POST(req: NextRequest) {
   try {
-    const { message, sessionId, history, simulate } = await req.json()
+    const { message, sessionId, history } = await req.json()
     if (!message || typeof message !== 'string') {
       return NextResponse.json({ error: 'message required' }, { status: 400 })
     }
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const result = await processMessage({ message, sessionId, history, simulate })
+    const result = await processMessage({ message, sessionId, history })
     return NextResponse.json(result)
   } catch (err) {
     console.error('[chat/route] error:', err)

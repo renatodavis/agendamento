@@ -21,7 +21,6 @@ type Msg = {
   role: 'user' | 'bot'
   text: string
   workflow?: string
-  simulated?: boolean
   ts: Date
 }
 
@@ -29,7 +28,6 @@ export default function ChatPanel() {
   const [msgs, setMsgs]         = useState<Msg[]>([])
   const [input, setInput]       = useState('')
   const [loading, setLoading]   = useState(false)
-  const [simMode, setSimMode]   = useState(true)
   const [botEnabled, setBotEnabled] = useState(true)
   const [sessionId]             = useState(() => crypto.randomUUID())
   const bottomRef               = useRef<HTMLDivElement>(null)
@@ -57,7 +55,7 @@ export default function ChatPanel() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: trimmed, sessionId, simulate: simMode }),
+        body: JSON.stringify({ message: trimmed, sessionId }),
       })
       const data = await res.json()
 
@@ -68,7 +66,6 @@ export default function ChatPanel() {
         role: 'bot',
         text: data.response,
         workflow: data.workflow,
-        simulated: data.simulated,
         ts: new Date(),
       }
       setMsgs(prev => [...prev, botMsg])
@@ -121,20 +118,6 @@ export default function ChatPanel() {
                 style={{ transform: botEnabled ? 'translateX(16px)' : 'translateX(0)' }} />
             </div>
           </label>
-          {/* Sim mode */}
-          <label className="flex items-center gap-1.5 cursor-pointer select-none" htmlFor={`${uid}-sim`}>
-            <span className="text-[10px]" style={{ color: 'var(--muted)' }}>
-              {simMode ? 'Sim' : 'API'}
-            </span>
-            <div className="relative w-8 h-4">
-              <input id={`${uid}-sim`} type="checkbox" className="sr-only"
-                checked={simMode} onChange={e => setSimMode(e.target.checked)} />
-              <div className="w-8 h-4 rounded-full transition-colors"
-                style={{ background: simMode ? '#F0A500' : '#3B9EFF' }} />
-              <div className="absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform"
-                style={{ transform: simMode ? 'translateX(0)' : 'translateX(16px)' }} />
-            </div>
-          </label>
         </div>
       </div>
 
@@ -144,20 +127,6 @@ export default function ChatPanel() {
           style={{ background: '#6B728012', borderBottom: '1px solid #6B728030', color: 'var(--muted)' }}>
           <span>⏸</span>
           Bot desligado — mensagens aparecem mas o assistente não responde
-        </div>
-      )}
-      {botEnabled && simMode && (
-        <div className="flex items-center gap-2 px-4 py-1.5 text-[10px] shrink-0"
-          style={{ background: '#F0A50012', borderBottom: '1px solid #F0A50030', color: '#F0A500' }}>
-          <span>⚡</span>
-          Modo simulação — respostas são scripts locais, sem chamada à API
-        </div>
-      )}
-      {botEnabled && !simMode && (
-        <div className="flex items-center gap-2 px-4 py-1.5 text-[10px] shrink-0"
-          style={{ background: '#3B9EFF12', borderBottom: '1px solid #3B9EFF30', color: 'var(--blue)' }}>
-          <span>🔵</span>
-          API real ativa — requer ANTHROPIC_API_KEY no .env.local
         </div>
       )}
 
@@ -196,7 +165,6 @@ export default function ChatPanel() {
                     background: `${WORKFLOW_LABEL[m.workflow].color}15`,
                   }}>
                   {WORKFLOW_LABEL[m.workflow].label}
-                  {m.simulated && <span className="opacity-60 font-normal"> · sim</span>}
                 </span>
               )}
               <div className="px-3 py-2 rounded-2xl text-xs leading-relaxed whitespace-pre-wrap"
