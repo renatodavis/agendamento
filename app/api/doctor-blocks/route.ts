@@ -40,15 +40,19 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Background: find affected appointments and create approval_requests
-  processBlockAffectedAppointments({
-    id: data.id,
-    doctor_id,
-    blocked_date,
-    start_time: start_time || null,
-    end_time: end_time || null,
-    reason: reason || null,
-  }).catch(err => console.error('[doctor-blocks] processBlockAffectedAppointments error:', err))
+  // Aguarda sincronamente — fire-and-forget seria cortado pelo Vercel antes de terminar
+  try {
+    await processBlockAffectedAppointments({
+      id: data.id,
+      doctor_id,
+      blocked_date,
+      start_time: start_time || null,
+      end_time: end_time || null,
+      reason: reason || null,
+    })
+  } catch (err) {
+    console.error('[doctor-blocks] processBlockAffectedAppointments error:', err)
+  }
 
   return NextResponse.json(data, { status: 201 })
 }
