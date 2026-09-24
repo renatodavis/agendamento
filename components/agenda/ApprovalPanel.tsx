@@ -71,7 +71,7 @@ const TYPE_CONFIG: Record<RequestType, {
     border: '#8B5CF6',
   },
   reagendamento_forcado: {
-    label: 'Consulta cancelada · sugerir novo horário',
+    label: 'Cancelamento por bloqueio',
     icon: '⚠️',
     color: '#F97316',
     bg: '#F9731612',

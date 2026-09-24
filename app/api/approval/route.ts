@@ -222,14 +222,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, action: 'resolve' })
     }
 
-    // ── reagendamento_forcado: recepção aprova → envia sugestão ao paciente ──
-    // O agendamento já foi cancelado ao criar o bloqueio; aqui só notifica.
+    // ── reagendamento_forcado: recepção aprova → cancela agendamento + notifica paciente ──
     if (action === 'confirm_forced_reschedule') {
       type ForcedDetails = { appointment_id?: string; scheduled_at?: string; suggested_new_at?: string; doctor_name?: string; doctor_specialty?: string; block_reason?: string }
       const fd = approval.details as ForcedDetails | null
+      const apptId   = fd?.appointment_id ?? null
       const newIso   = fd?.suggested_new_at ?? null
       const fdocName = fd?.doctor_name ?? doctorName
       const fdocSpec = fd?.doctor_specialty ?? doctorSpec
+
+      // Cancela o agendamento agora que a recepção aprovou
+      if (apptId) {
+        await db.from('appointments').update({
+          status: 'cancelada',
+          cancel_reason: fd?.block_reason
+            ? `Bloqueio de agenda do médico: ${fd.block_reason}`
+            : 'Bloqueio de agenda do médico',
+        }).eq('id', apptId)
+      }
 
       await db.from('approval_requests').update({
         status: 'resolved', reviewed_at: now, reviewed_by: 'receptionist',

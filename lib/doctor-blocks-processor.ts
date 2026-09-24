@@ -67,15 +67,7 @@ export async function processBlockAffectedAppointments(block: BlockedSlot): Prom
       ? await findNearestSlot(db, block.doctor_id, block.blocked_date, preferredHour, preferredMin, schedules)
       : null
 
-    // Cancela o agendamento imediatamente
-    await db.from('appointments').update({
-      status: 'cancelada',
-      cancel_reason: block.reason
-        ? `Bloqueio de agenda do médico: ${block.reason}`
-        : 'Bloqueio de agenda do médico',
-    }).eq('id', appt.id)
-
-    // Cria approval_request para a recepção enviar a sugestão ao paciente
+    // Cria approval_request para a recepção revisar antes de cancelar e notificar
     await db.from('approval_requests').insert({
       patient_id: appt.patient_id,
       patient_name: patient?.name ?? 'Paciente',
