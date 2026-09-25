@@ -780,12 +780,18 @@ export async function processMessage(params: {
   let first: Awaited<ReturnType<typeof anthropic.messages.create>>
   try {
     first = await anthropic.messages.create({ model: 'claude-sonnet-5', max_tokens: 1024, system: SYSTEM_PROMPT, messages, tools: TOOLS })
-    // Limpa flag de erro de crédito se a chamada teve sucesso
-    fetch('/api/ai-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: null }) }).catch(() => {})
+    // Limpa flag de erro de crédito se a chamada teve sucesso (grava direto no DB — fetch de URL relativa não funciona server-side)
+    db.from('clinic_config').upsert(
+      { key: 'ai_credit_error', value: { error: null, at: new Date().toISOString() } },
+      { onConflict: 'key' }
+    ).then(() => {}, () => {})
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     if (msg.includes('credit balance is too low') || msg.includes('insufficient_quota')) {
-      fetch('/api/ai-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'no_credits' }) }).catch(() => {})
+      await db.from('clinic_config').upsert(
+        { key: 'ai_credit_error', value: { error: 'no_credits', at: new Date().toISOString() } },
+        { onConflict: 'key' }
+      )
     }
     throw err
   }
@@ -853,19 +859,28 @@ export async function processMessage(params: {
     action: 'chat_response', record_type: 'wa_message', record_id: sessionId ?? 'anonymous',
   })
 
-  // Grava uso no DB de forma assíncrona (não bloqueia a resposta)
-  const COST_INPUT_PER_TOK  = 3 / 1_000_000
-  const COST_OUTPUT_PER_TOK = 15 / 1_000_000
-  fetch('/api/stats', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      messages:      1,
-      input_tokens:  totalInputTokens,
-      output_tokens: totalOutputTokens,
-      cost_usd:      totalInputTokens * COST_INPUT_PER_TOK + totalOutputTokens * COST_OUTPUT_PER_TOK,
-    }),
-  }).catch(() => {})
+  // Grava uso no DB (direto, sem fetch — URL relativa não funciona server-side)
+  recordDailyUsage(db, {
+    messages: 1,
+    input_tokens: totalInputTokens,
+    output_tokens: totalOutputTokens,
+    cost_usd: costUsd,
+  }).catch(err => console.error('[chat] falha ao gravar stats diários:', err))
 
   return { response, workflow, tokens: { input: totalInputTokens, output: totalOutputTokens } }
+}
+
+type DayStats = { messages: number; input_tokens: number; output_tokens: number; cost_usd: number }
+
+async function recordDailyUsage(db: SupabaseClient, delta: DayStats): Promise<void> {
+  const key = 'stats_' + new Date().toISOString().split('T')[0]
+  const { data: existing } = await db.from('clinic_config').select('value').eq('key', key).single()
+  const current = (existing?.value ?? { messages: 0, input_tokens: 0, output_tokens: 0, cost_usd: 0 }) as DayStats
+  const updated: DayStats = {
+    messages:      (current.messages      ?? 0) + delta.messages,
+    input_tokens:  (current.input_tokens  ?? 0) + delta.input_tokens,
+    output_tokens: (current.output_tokens ?? 0) + delta.output_tokens,
+    cost_usd:      (current.cost_usd      ?? 0) + delta.cost_usd,
+  }
+  await db.from('clinic_config').upsert({ key, value: updated }, { onConflict: 'key' })
 }

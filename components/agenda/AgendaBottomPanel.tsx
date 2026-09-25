@@ -261,6 +261,20 @@ export default function AgendaBottomPanel({ approvalCount = 0 }: { approvalCount
   // Reset doctor filter when day changes
   useEffect(() => { setDoctorFilter(null) }, [dayOffset])
 
+  // Swipe to change day (mobile)
+  const touchStartX = useRef<number | null>(null)
+  const swipeHandlers = {
+    onTouchStart: (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX },
+    onTouchEnd:   (e: React.TouchEvent) => {
+      if (touchStartX.current === null) return
+      const delta = e.changedTouches[0].clientX - touchStartX.current
+      touchStartX.current = null
+      if (Math.abs(delta) < 50) return
+      if (delta < 0) setDayOffset(d => Math.min(30, d + 1))   // swipe left → próximo dia
+      if (delta > 0) setDayOffset(d => Math.max(-1, d - 1))   // swipe right → dia anterior
+    },
+  }
+
   useEffect(() => {
     if (selId && window.innerWidth <= 768) {
       requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
@@ -519,7 +533,7 @@ export default function AgendaBottomPanel({ approvalCount = 0 }: { approvalCount
       {/* Body — list view */}
       {agendaView === 'list' && (
       <div className="flex flex-1 min-h-0">
-        {/* List — full width when nothing selected, 44% when detail open */}
+        {/* List — full width when nothing selected, 44% when detail open. Swipe left/right to change day (mobile) */}
         <div
           className="overflow-y-auto"
           style={{
@@ -527,7 +541,8 @@ export default function AgendaBottomPanel({ approvalCount = 0 }: { approvalCount
             transition: 'width 0.2s ease',
             borderRight: selAppt ? '1px solid var(--border)' : 'none',
             flexShrink: 0,
-          }}>
+          }}
+          {...swipeHandlers}>
           {loading && (
             <div className="flex items-center justify-center h-20 gap-2 text-sm" style={{ color: 'var(--muted)' }}>
               <span className="w-4 h-4 border-2 rounded-full animate-spin"
