@@ -275,6 +275,20 @@ export default function AgendaDashboard() {
     }
   }, [selId])
 
+  // Swipe to change day
+  const touchStartX = useRef<number | null>(null)
+  const swipeHandlers = {
+    onTouchStart: (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX },
+    onTouchEnd:   (e: React.TouchEvent) => {
+      if (touchStartX.current === null) return
+      const delta = e.changedTouches[0].clientX - touchStartX.current
+      touchStartX.current = null
+      if (Math.abs(delta) < 50) return
+      if (delta < 0 && dayOffset < 30) setDayOffset(d => d + 1)  // swipe left → next day
+      if (delta > 0 && dayOffset > -1) setDayOffset(d => d - 1)  // swipe right → prev day
+    },
+  }
+
   const counts = useMemo(() => ({
     todos:     appointments.length,
     atendida:  appointments.filter(a => a.status === 'atendida').length,
@@ -434,9 +448,10 @@ export default function AgendaDashboard() {
         {/* Body: list + detail */}
         <div className="flex flex-1 min-h-0">
 
-          {/* List */}
+          {/* List — swipe left/right to change day on mobile */}
           <div className="w-full md:w-[54%] overflow-y-auto border-r"
-            style={{ borderColor: 'var(--border)', background: 'var(--panel)' }}>
+            style={{ borderColor: 'var(--border)', background: 'var(--panel)' }}
+            {...swipeHandlers}>
             {loading && (
               <div className="flex items-center justify-center h-24 gap-2 text-xs"
                 style={{ color: 'var(--muted)' }}>
