@@ -55,6 +55,26 @@ export default function AppLayout() {
     return () => clearInterval(interval)
   }, [])
 
+  // Busca stats diários do DB (inclui mensagens via webhook WhatsApp)
+  useEffect(() => {
+    async function loadStats() {
+      try {
+        const res = await fetch('/api/stats')
+        if (!res.ok) return
+        const data = await res.json()
+        setStats(s => ({
+          ...s,
+          total:   data.messages   ?? s.total,
+          tokens:  (data.input_tokens ?? 0) + (data.output_tokens ?? 0),
+          cost:    data.cost_usd  ?? s.cost,
+        }))
+      } catch { /* silencioso */ }
+    }
+    loadStats()
+    const interval = setInterval(loadStats, 30_000)
+    return () => clearInterval(interval)
+  }, [])
+
   const sb = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!

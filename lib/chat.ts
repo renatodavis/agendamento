@@ -853,5 +853,19 @@ export async function processMessage(params: {
     action: 'chat_response', record_type: 'wa_message', record_id: sessionId ?? 'anonymous',
   })
 
+  // Grava uso no DB de forma assíncrona (não bloqueia a resposta)
+  const COST_INPUT_PER_TOK  = 3 / 1_000_000
+  const COST_OUTPUT_PER_TOK = 15 / 1_000_000
+  fetch('/api/stats', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages:      1,
+      input_tokens:  totalInputTokens,
+      output_tokens: totalOutputTokens,
+      cost_usd:      totalInputTokens * COST_INPUT_PER_TOK + totalOutputTokens * COST_OUTPUT_PER_TOK,
+    }),
+  }).catch(() => {})
+
   return { response, workflow, tokens: { input: totalInputTokens, output: totalOutputTokens } }
 }
