@@ -75,6 +75,23 @@ export default function AppLayout() {
     return () => clearInterval(interval)
   }, [])
 
+  // Busca o Log de Agentes real do Langfuse (inclui interações via webhook WhatsApp)
+  useEffect(() => {
+    async function loadAgentLog() {
+      try {
+        const res = await fetch('/api/agent-log')
+        if (!res.ok) return
+        const data = await res.json()
+        if (Array.isArray(data.entries)) {
+          setLogEntries(data.entries.map((e: LogEntry & { ts: string }) => ({ ...e, ts: new Date(e.ts) })))
+        }
+      } catch { /* silencioso */ }
+    }
+    loadAgentLog()
+    const interval = setInterval(loadAgentLog, 20_000)
+    return () => clearInterval(interval)
+  }, [])
+
   const sb = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
