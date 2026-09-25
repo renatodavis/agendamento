@@ -1,5 +1,5 @@
 'use client'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import WaPanel from '@/components/wa/WaPanel'
@@ -38,6 +38,23 @@ export default function AppLayout() {
   const clinicName                = useClinicName()
   const router = useRouter()
 
+  const [aiAlert, setAiAlert] = useState(false)
+
+  useEffect(() => {
+    async function checkAi() {
+      try {
+        const res = await fetch('/api/ai-status')
+        if (res.ok) {
+          const data = await res.json()
+          setAiAlert(data.ok === false)
+        }
+      } catch { /* silencioso */ }
+    }
+    checkAi()
+    const interval = setInterval(checkAi, 60_000)
+    return () => clearInterval(interval)
+  }, [])
+
   const sb = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -65,6 +82,22 @@ export default function AppLayout() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--background)', overflow: 'hidden' }}>
+
+      {/* ── Alerta de crédito IA ── */}
+      {aiAlert && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          padding: '6px 16px', flexShrink: 0, fontSize: 12, fontWeight: 600,
+          background: '#F97316', color: '#fff',
+        }}>
+          <span>⚠️</span>
+          <span>Saldo Anthropic insuficiente — o bot de IA está offline.</span>
+          <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener noreferrer"
+            style={{ color: '#fff', textDecoration: 'underline', fontWeight: 700 }}>
+            Adicionar créditos →
+          </a>
+        </div>
+      )}
 
       {/* ── Header ── */}
       <header style={{

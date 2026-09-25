@@ -777,7 +777,18 @@ export async function processMessage(params: {
   const COST_INPUT = 3 / 1_000_000
   const COST_OUTPUT = 15 / 1_000_000
 
-  let first = await anthropic.messages.create({ model: 'claude-sonnet-5', max_tokens: 1024, system: SYSTEM_PROMPT, messages, tools: TOOLS })
+  let first: Awaited<ReturnType<typeof anthropic.messages.create>>
+  try {
+    first = await anthropic.messages.create({ model: 'claude-sonnet-5', max_tokens: 1024, system: SYSTEM_PROMPT, messages, tools: TOOLS })
+    // Limpa flag de erro de crédito se a chamada teve sucesso
+    fetch('/api/ai-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: null }) }).catch(() => {})
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes('credit balance is too low') || msg.includes('insufficient_quota')) {
+      fetch('/api/ai-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ error: 'no_credits' }) }).catch(() => {})
+    }
+    throw err
+  }
   let totalInputTokens  = first.usage.input_tokens
   let totalOutputTokens = first.usage.output_tokens
   const gen1 = trace?.generation({ name: 'coordenador-turn-1', model: 'claude-sonnet-5', input: messages, output: first.content,
