@@ -8,10 +8,58 @@ import { maybeCreateApprovalIntercept } from '@/lib/approval-intercept'
 // Meta WhatsApp Business Cloud API webhook
 // Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks
 
-const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN
-const APP_SECRET   = process.env.WHATSAPP_APP_SECRET
-const WA_TOKEN     = process.env.WHATSAPP_API_TOKEN
-const WA_PHONE_ID  = process.env.WHATSAPP_PHONE_NUMBER_ID
+const VERIFY_TOKEN  = process.env.WHATSAPP_VERIFY_TOKEN
+const APP_SECRET    = process.env.WHATSAPP_APP_SECRET
+const WA_TOKEN      = process.env.WHATSAPP_API_TOKEN
+const WA_PHONE_ID   = process.env.WHATSAPP_PHONE_NUMBER_ID
+const GROQ_API_KEY  = process.env.GROQ_API_KEY
+
+// ── Transcrição de áudio (mensagens de voz) via Groq Whisper ──────────
+async function transcribeAudio(mediaId: string): Promise<string | null> {
+  if (!WA_TOKEN || !GROQ_API_KEY) return null
+  try {
+    // 1. Resolve a URL temporária de download do media na Graph API
+    const metaRes = await fetch(`https://graph.facebook.com/v19.0/${mediaId}`, {
+      headers: { Authorization: `Bearer ${WA_TOKEN}` },
+    })
+    if (!metaRes.ok) {
+      console.error('[whatsapp] falha ao resolver media:', metaRes.status)
+      return null
+    }
+    const meta = await metaRes.json() as { url?: string; mime_type?: string }
+    if (!meta.url) return null
+
+    // 2. Baixa o binário do áudio (mesma auth do WhatsApp)
+    const audioRes = await fetch(meta.url, { headers: { Authorization: `Bearer ${WA_TOKEN}` } })
+    if (!audioRes.ok) {
+      console.error('[whatsapp] falha ao baixar áudio:', audioRes.status)
+      return null
+    }
+    const audioBuffer = await audioRes.arrayBuffer()
+
+    // 3. Transcreve via Groq (Whisper large-v3-turbo)
+    const ext = meta.mime_type?.includes('ogg') ? 'ogg' : meta.mime_type?.includes('mp4') ? 'mp4' : 'mp3'
+    const form = new FormData()
+    form.append('file', new Blob([audioBuffer], { type: meta.mime_type ?? 'audio/ogg' }), `audio.${ext}`)
+    form.append('model', 'whisper-large-v3-turbo')
+    form.append('language', 'pt')
+
+    const groqRes = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${GROQ_API_KEY}` },
+      body: form,
+    })
+    if (!groqRes.ok) {
+      console.error('[whatsapp] Groq transcription failed:', groqRes.status, await groqRes.text().catch(() => ''))
+      return null
+    }
+    const data = await groqRes.json() as { text?: string }
+    return data.text?.trim() || null
+  } catch (err) {
+    console.error('[whatsapp] transcribeAudio error:', err)
+    return null
+  }
+}
 
 // O1: Rate limiting — max inbound messages per minute per session
 const RATE_LIMIT_MAX = 10
@@ -83,7 +131,7 @@ export async function POST(req: NextRequest) {
     if (!message) return NextResponse.json({ ok: true })
 
     const phone = message.from
-    const text  = message.text?.body ?? ''
+    let text    = message.text?.body ?? ''
     const wamid = message.id as string | undefined
     const contactName = value?.contacts?.[0]?.profile?.name ?? null
 
@@ -98,6 +146,26 @@ export async function POST(req: NextRequest) {
       if (existing) {
         console.log('[whatsapp/POST] wamid duplicado ignorado:', wamid)
         return NextResponse.json({ ok: true })
+      }
+    }
+
+    // Mensagem de voz — transcreve via Groq Whisper antes de seguir o fluxo normal
+    if (message.type === 'audio' && message.audio?.id) {
+      const transcript = await transcribeAudio(message.audio.id)
+      if (transcript) {
+        text = transcript
+      } else {
+        if (WA_TOKEN && WA_PHONE_ID) {
+          await fetch(`https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messaging_product: 'whatsapp', to: phone, type: 'text',
+              text: { body: 'Desculpe, não consegui entender o áudio. Pode escrever sua mensagem, por favor? 🙏' },
+            }),
+          })
+        }
+        return NextResponse.json({ ok: true, action: 'audio_transcription_failed' })
       }
     }
 
