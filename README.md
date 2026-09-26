@@ -1,36 +1,81 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AgendaAgentic
 
-## Getting Started
+Sistema de agendamento inteligente via WhatsApp com IA. Clientes enviam mensagens em linguagem natural e o assistente agenda, confirma e lembra automaticamente — sem recepcionista.
 
-First, run the development server:
+## Stack
+
+- **Frontend / Backend**: Next.js 15 (App Router) — deploy no Vercel
+- **Banco de dados**: Supabase (PostgreSQL + Auth + RLS)
+- **IA**: Claude (Anthropic) via API
+- **Mensageria**: WhatsApp Business Cloud API (Meta)
+- **Observabilidade**: Langfuse (opcional)
+
+## Estrutura de rotas
+
+| Rota | Descrição |
+|------|-----------|
+| `/` | Landing page pública (AgendaAgentic) |
+| `/dashboard` | Painel de gestão — requer autenticação |
+| `/login` | Login da recepção/admin |
+| `/api/whatsapp` | Webhook do WhatsApp (GET = verificação, POST = mensagens) |
+| `/api/clinic-config` | Configuração da clínica (nome, horários, etc.) |
+| `/api/appointments` | CRUD de agendamentos |
+| `/api/doctors` | Profissionais cadastrados |
+
+## Variáveis de ambiente
+
+Copie `.env.example` para `.env.local` e preencha:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+| Variável | Descrição |
+|----------|-----------|
+| `NEXT_PUBLIC_SUPABASE_URL` | URL do projeto Supabase |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Chave anon do Supabase (pública) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Chave service role (somente servidor) |
+| `ANTHROPIC_API_KEY` | Chave da API Anthropic |
+| `WHATSAPP_API_TOKEN` | Token da API WhatsApp Business Cloud |
+| `WHATSAPP_PHONE_NUMBER_ID` | ID do número WhatsApp |
+| `WHATSAPP_VERIFY_TOKEN` | Token de verificação do webhook Meta |
+| `NEXT_PUBLIC_APP_URL` | URL pública do app (ex: `https://meuapp.vercel.app`) |
+| `CRON_SECRET` | Segredo para proteger a rota de lembretes (`/api/appointments/remind`) |
+| `LANGFUSE_SECRET_KEY` | (Opcional) Monitoramento de custo LLM |
+| `LANGFUSE_PUBLIC_KEY` | (Opcional) |
+| `LANGFUSE_BASE_URL` | (Opcional) — padrão: `https://cloud.langfuse.com` |
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+> **Atenção:** Nunca commite `.env` ou `.env.local`. O `.gitignore` já os exclui.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Rodar localmente
 
-## Learn More
+```bash
+npm install
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Acesse [http://localhost:3000](http://localhost:3000).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Configurar o nome do negócio
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+O nome exibido em todo o sistema vem da tabela `clinic_config` no Supabase:
 
-## Deploy on Vercel
+```sql
+UPDATE clinic_config SET value = 'Minha Clínica' WHERE key = 'clinic_name';
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Ou via API autenticada:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+curl -X PUT https://seu-app.vercel.app/api/clinic-config \
+  -H "Content-Type: application/json" \
+  -d '{"clinic_name": "Minha Clínica", "working_hours": "Seg a Sex, 8h às 18h"}'
+```
+
+## Deploy
+
+O deploy é automático via Vercel ao fazer push em `main`. Configure as variáveis de ambiente no painel do Vercel em **Settings → Environment Variables**.
+
+## Generalização para outros domínios
+
+O sistema suporta qualquer tipo de negócio com agendamentos (barbearias, salões, clínicas odontológicas, veterinárias, etc.). Altere `clinic_name` e `working_hours` na config e o assistente adapta automaticamente o vocabulário e as respostas.

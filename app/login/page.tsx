@@ -2,9 +2,11 @@
 import { useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
+import { useClinicName } from '@/lib/useClinicName'
 
 export default function LoginPage() {
   const router = useRouter()
+  const clinicName = useClinicName()
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [error, setError]       = useState<string | null>(null)
@@ -24,7 +26,7 @@ export default function LoginPage() {
       setError('E-mail ou senha incorretos.')
       setLoading(false)
     } else {
-      router.push('/')
+      router.push('/dashboard')
       router.refresh()
     }
   }
@@ -52,7 +54,7 @@ export default function LoginPage() {
             fontSize: 26, boxShadow: '0 4px 12px rgba(5,150,105,.3)',
           }}>🏥</div>
           <div style={{ fontWeight: 700, fontSize: 18, letterSpacing: '-.01em', color: 'var(--foreground, #0F1923)' }}>
-            Clínica São Lucas
+            {clinicName}
           </div>
           <div style={{ fontSize: 11, marginTop: 4, color: 'var(--muted, #6B7A90)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
             Acesso restrito · Recepção
