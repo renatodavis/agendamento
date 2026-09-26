@@ -1,23 +1,8 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
-
-function makeClient() {
-  const cookieStore = cookies()
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: () => {},
-      },
-    }
-  )
-}
+import { createServerClient } from '@/lib/supabase'
 
 export async function GET() {
-  const db = makeClient()
+  const db = createServerClient()
   const { data, error } = await db
     .from('profiles')
     .select('*')
@@ -28,7 +13,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const body = await req.json()
-  const db = makeClient()
+  const db = createServerClient()
   const { data, error } = await db
     .from('profiles')
     .insert({

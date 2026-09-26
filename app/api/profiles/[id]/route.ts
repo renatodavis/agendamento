@@ -1,24 +1,10 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { createServerClient } from '@/lib/supabase'
 
-function makeClient() {
-  const cookieStore = cookies()
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: () => {},
-      },
-    }
-  )
-}
-
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const body = await req.json()
-  const db = makeClient()
+  const db = createServerClient()
   const { data, error } = await db
     .from('profiles')
     .update({
@@ -29,16 +15,17 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
       specialties: body.specialties,
       vocabulary: body.vocabulary,
     })
-    .eq('id', params.id)
+    .eq('id', id)
     .select()
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  const db = makeClient()
-  const { error } = await db.from('profiles').delete().eq('id', params.id)
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const db = createServerClient()
+  const { error } = await db.from('profiles').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }
