@@ -90,9 +90,13 @@ export default function ClinicConfigPanel() {
           <input
             className="text-[12px] px-2.5 py-1.5 rounded-md border outline-none"
             style={{ background: 'var(--panel)', borderColor: 'var(--border)', color: 'var(--text)' }}
+            placeholder="Ex: Segunda a Sexta, 8h às 18h — Sábado, 8h às 12h"
             value={cfg.working_hours ?? ''}
             onChange={e => setCfg(p => ({ ...p, working_hours: e.target.value }))}
           />
+          <span className="text-[9px] leading-relaxed" style={{ color: 'var(--muted)' }}>
+            O assistente usará este horário para orientar agendamentos e nunca sugerirá horários fora desse período.
+          </span>
         </label>
       </section>
 

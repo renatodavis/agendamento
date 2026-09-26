@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { invalidateClinicBasicConfigCache } from '@/lib/clinic-config-server'
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -16,6 +17,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     .select()
     .single()
   if (e2) return NextResponse.json({ error: e2.message }, { status: 500 })
+
+  invalidateClinicBasicConfigCache()
 
   return NextResponse.json(data)
 }

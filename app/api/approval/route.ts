@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     if (!id || !action) return NextResponse.json({ error: 'id e action são obrigatórios' }, { status: 400 })
 
     const db = createServerClient()
-    const { clinicName } = await getClinicBasicConfig()
+    const { clinicName, vocabulary: voc } = await getClinicBasicConfig()
 
     const { data: approval, error } = await db
       .from('approval_requests')
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
         `Olá, *${patientName}*!\n\n` +
         `Infelizmente o horário sugerido não está mais disponível. 😔\n\n` +
         `Nossa equipe está buscando outras opções e entrará em contato em breve.\n\n` +
-        `Ou se preferir, pode nos dizer qual especialidade e período prefere para agilizarmos! — ${clinicName} 🏥`
+        `Ou se preferir, pode nos dizer qual serviço e período prefere para agilizarmos! — ${clinicName} ${voc.emoji}`
       await notifyAndLog(db, approval.session_id, msg)
 
       return NextResponse.json({ ok: true, action: 'rejected' })
@@ -176,9 +176,9 @@ export async function POST(req: NextRequest) {
         : apptStr ? `📅 *${apptStr}*\n\n` : ''
       const msg =
         `Olá, *${patientName}*! ✅\n\n` +
-        `Sua consulta foi cancelada conforme solicitado.\n\n` +
+        `${voc.appointment.charAt(0).toUpperCase() + voc.appointment.slice(1)} cancelad${voc.appointment.endsWith('a') ? 'a' : 'o'} conforme solicitado.\n\n` +
         apptLine +
-        `Se precisar remarcar, é só nos chamar aqui no WhatsApp! — ${clinicName} 🏥`
+        `Se precisar remarcar, é só nos chamar aqui no WhatsApp! — ${clinicName} ${voc.emoji}`
       await notifyAndLog(db, approval.session_id, msg)
 
       return NextResponse.json({ ok: true, action: 'confirm_cancel', cancelled_appointment_id: apptId })
@@ -196,13 +196,15 @@ export async function POST(req: NextRequest) {
       const apptInfo = apptStr
         ? `\n📅 *${apptStr}*${doctorName ? `\n👨‍⚕️ ${doctorName}` : ''}\n`
         : ''
+      const apptWord = voc.appointment
+      const apptCap  = apptWord.charAt(0).toUpperCase() + apptWord.slice(1)
       const msg = isAlteracao
         ? `Olá, *${patientName}*! 🗓\n\n` +
-          `Confirmamos que sua consulta foi mantida no horário original.${apptInfo}\n` +
-          `Se quiser remarcar, é só nos dizer a data preferida! — ${clinicName} 🏥`
+          `Confirmamos que ${voc.appointment} foi mantid${apptWord.endsWith('a') ? 'a' : 'o'} no horário original.${apptInfo}\n` +
+          `Se quiser remarcar, é só nos dizer a data preferida! — ${clinicName} ${voc.emoji}`
         : `Olá, *${patientName}*! 😊\n\n` +
-          `Ótimo! Sua consulta foi mantida. Aguardamos sua presença!${apptInfo}\n` +
-          `Se precisar de algo mais, estamos aqui. — ${clinicName} 🏥`
+          `Ótimo! ${apptCap} mantid${apptWord.endsWith('a') ? 'a' : 'o'}. Aguardamos sua presença!${apptInfo}\n` +
+          `Se precisar de algo mais, estamos aqui. — ${clinicName} ${voc.emoji}`
       await notifyAndLog(db, approval.session_id, msg)
 
       return NextResponse.json({ ok: true, action: 'keep_appointment' })
@@ -217,7 +219,7 @@ export async function POST(req: NextRequest) {
       const msg =
         `Olá, *${patientName}*! 📞\n\n` +
         `Nossa equipe já está ciente da sua solicitação e entrará em contato com você em breve.\n\n` +
-        `${clinicName} 🏥`
+        `${clinicName} ${voc.emoji}`
       await notifyAndLog(db, approval.session_id, msg)
       return NextResponse.json({ ok: true, action: 'resolve' })
     }
@@ -252,16 +254,16 @@ export async function POST(req: NextRequest) {
         const newTime = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
         msg =
           `Olá, *${patientName}*! 😔\n\n` +
-          `Informamos que houve um imprevisto e sua consulta precisou ser cancelada.\n\n` +
+          `Informamos que houve um imprevisto e ${voc.appointment} precisou ser cancelad${voc.appointment.endsWith('a') ? 'a' : 'o'}.\n\n` +
           `Sugerimos um novo horário para reagendamento:\n` +
           `📅 *${newDate} às ${newTime}*\n` +
           (fdocName ? `👨‍⚕️ ${fdocName}${fdocSpec ? ` (${fdocSpec})` : ''}\n\n` : '\n') +
-          `Se esse horário for conveniente, é só confirmar! Caso contrário, nos diga sua preferência. Pedimos desculpas pelo transtorno. — ${clinicName} 🏥`
+          `Se esse horário for conveniente, é só confirmar! Caso contrário, nos diga sua preferência. Pedimos desculpas pelo transtorno. — ${clinicName} ${voc.emoji}`
       } else {
         msg =
           `Olá, *${patientName}*! 😔\n\n` +
-          `Informamos que houve um imprevisto e sua consulta precisou ser cancelada.\n\n` +
-          `Por favor, entre em contato para reagendar em uma data de sua preferência. Pedimos desculpas pelo transtorno. — ${clinicName} 🏥`
+          `Informamos que houve um imprevisto e ${voc.appointment} precisou ser cancelad${voc.appointment.endsWith('a') ? 'a' : 'o'}.\n\n` +
+          `Por favor, entre em contato para reagendar em uma data de sua preferência. Pedimos desculpas pelo transtorno. — ${clinicName} ${voc.emoji}`
       }
       // Se não há session_id (paciente cadastrado pelo admin), busca telefone direto em patients
       if (approval.session_id) {

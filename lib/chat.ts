@@ -454,6 +454,20 @@ async function escalarParaRecepcao(
         appointmentDetails = { appointment_id: appt.id, scheduled_at: appt.scheduled_at, appointment_status: appt.status, doctor_name: doc?.name, doctor_specialty: doc?.specialty, new_scheduled_at: input.new_scheduled_at ?? null }
       }
     }
+    // Guard: evita duplicata se já existe solicitação pendente do mesmo tipo para a mesma sessão
+    if (sessionId) {
+      const { data: existing } = await db.from('approval_requests')
+        .select('id')
+        .eq('session_id', sessionId)
+        .eq('request_type', input.request_type)
+        .eq('status', 'pending')
+        .limit(1)
+        .maybeSingle()
+      if (existing?.id) {
+        return JSON.stringify({ ok: true, request_id: existing.id, already_exists: true, message: `Solicitação de ${typeLabels[input.request_type]} já registrada. A recepção já foi notificada e entrará em contato com ${patientName}.` })
+      }
+    }
+
     const { data: req, error } = await db.from('approval_requests').insert({
       session_id: sessionId ?? null, patient_id: patientId, patient_name: patientName,
       doctor_id: doctorId, request_type: input.request_type, status: 'pending',
@@ -619,6 +633,12 @@ ${professionalsList}
 MENSAGEM DE BOAS-VINDAS (use quando for o primeiro contato ou saudação sem contexto):
 ${welcomeMsg}
 
+REGRA DE HORÁRIO DE FUNCIONAMENTO (OBRIGATÓRIA):
+- O estabelecimento funciona: ${cfg.workingHours}
+- NUNCA sugira, confirme ou agende horários fora desse período de funcionamento.
+- Se o ${voc.client} pedir um horário fora do funcionamento (ex: domingo quando não atende, ou após o fechamento), informe o horário correto e ofereça alternativas dentro do período configurado.
+- Em caso de dúvida sobre disponibilidade, use a ferramenta consultar_disponibilidade — ela já respeita os horários cadastrados.
+
 REGRA DE ESCOPO (OBRIGATÓRIA):
 - Atenda APENAS solicitações relacionadas aos serviços listados acima: ${serviceNames}
 - Se o ${voc.client} solicitar serviço NÃO listado, responda: "${outOfScope}"
@@ -626,13 +646,20 @@ REGRA DE ESCOPO (OBRIGATÓRIA):
 ${urgencyLine}`
 }
 
-function buildCoordinatorPrompt(clinicName: string, voc: ProfileVocabulary = DEFAULT_VOCABULARY) { return `Você é o assistente de ${voc.appointment}s da ${clinicName}, responsável por orquestrar o atendimento de ${voc.client}s via WhatsApp.
+function buildCoordinatorPrompt(clinicName: string, voc: ProfileVocabulary = DEFAULT_VOCABULARY, workingHours = 'Segunda a Sexta, 8h às 18h') { return `Você é o assistente de ${voc.appointment}s da ${clinicName}, responsável por orquestrar o atendimento de ${voc.client}s via WhatsApp.
 
 Seu papel:
 - Identificar a intenção do ${voc.client} (${voc.appointment}, urgência, cadastro, histórico)
 - Delegar para o fluxo correto usando as ferramentas disponíveis
 - Nunca emitir diagnóstico, prescrição ou conduta clínica
 - Qualquer suspeita clínica → escalar para ${voc.professional} imediatamente
+
+HORÁRIO DE FUNCIONAMENTO (REGRA ABSOLUTA):
+- ${clinicName} funciona: ${workingHours}
+- NUNCA sugira horários fora desse período — nem ao conversar, nem ao usar ferramentas.
+- Se o ${voc.client} pedir um horário fora do funcionamento, informe os horários corretos e sugira alternativas dentro do período.
+- Ao apresentar slots de disponibilidade, verifique se estão dentro do horário de funcionamento antes de exibi-los.
+- Ao confirmar um agendamento, inclua o horário de funcionamento no resumo se o horário estiver próximo dos limites.
 
 REGRAS CRÍTICAS:
 - NUNCA diagnostica doenças ou prescreve medicamentos
@@ -701,7 +728,7 @@ Quando o paciente quiser mudar o horário de uma consulta existente:
 5. Responda ao paciente: "Sua solicitação de remarcação foi registrada. Nossa equipe confirmará o novo horário em breve. 🗓"
 
 ESCALAÇÃO PARA RECEPÇÃO — REGRA ABSOLUTA:
-Ao PRIMEIRO sinal de qualquer uma destas intenções — chame escalar_para_recepcao IMEDIATAMENTE:
+Ao PRIMEIRO sinal de qualquer uma destas intenções — chame escalar_para_recepcao IMEDIATAMENTE (UMA ÚNICA VEZ por conversa — nunca chame duas vezes o mesmo request_type na mesma sessão):
 - "cancelar", "cancelamento", "desmarcar" → request_type: cancelamento
 - "falar com atendente", "recepcionista", "humano" → request_type: atendente
 - "remarcar", "alterar horário", "mudar data", "trocar horário" → request_type: alteracao_horario (com new_scheduled_at quando souber)
@@ -817,7 +844,7 @@ export async function processMessage(params: {
   const todayStr = nowBrt.toISOString().split('T')[0]
   const weekdays = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado']
   const DATE_CONTEXT = `DATA E HORA ATUAL (Brasília, UTC-3): ${todayStr} (${weekdays[nowBrt.getUTCDay()]}). Use esta data como referência para calcular "hoje", "amanhã", "quarta-feira", etc. Ao agendar, converta o dia da semana mencionado pelo paciente para a data YYYY-MM-DD correta relativa a hoje.`
-  const SYSTEM_PROMPT = buildSystemPrompt(clinicCfg) + '\n\n' + DATE_CONTEXT + '\n\n' + buildCoordinatorPrompt(clinicCfg.clinicName, clinicCfg.vocabulary)
+  const SYSTEM_PROMPT = buildSystemPrompt(clinicCfg) + '\n\n' + DATE_CONTEXT + '\n\n' + buildCoordinatorPrompt(clinicCfg.clinicName, clinicCfg.vocabulary, clinicCfg.workingHours)
 
   await db.from('audit_log').insert({
     actor_type: 'user', actor_id: sessionId ?? 'anonymous',
