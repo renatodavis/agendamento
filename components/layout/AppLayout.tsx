@@ -99,7 +99,7 @@ export default function AppLayout() {
 
   async function handleLogout() {
     await sb.auth.signOut()
-    router.push('/login')
+    router.push('/')
     router.refresh()
   }
 

@@ -1,7 +1,22 @@
 'use client'
 import { useEffect } from 'react'
+import { createBrowserClient } from '@supabase/ssr'
+import { useRouter } from 'next/navigation'
 
 export default function LandingPage() {
+  const router = useRouter()
+
+  useEffect(() => {
+    // Redirect authenticated users straight to the dashboard
+    const sb = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    sb.auth.getSession().then(({ data: { session } }) => {
+      if (session) router.replace('/dashboard')
+    })
+  }, [router])
+
   useEffect(() => {
     // Intersection observer for card entrance animations
     const targets = document.querySelectorAll<HTMLElement>('.aa-card-anim')
@@ -26,6 +41,8 @@ export default function LandingPage() {
   function scrollTo(id: string) {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
+
+  function goLogin() { router.push('/login') }
 
   return (
     <>
@@ -315,7 +332,7 @@ export default function LandingPage() {
               <li><a href="#funcionalidades" onClick={e => { e.preventDefault(); scrollTo('funcionalidades') }}>Funcionalidades</a></li>
               <li><a href="#negocios" onClick={e => { e.preventDefault(); scrollTo('negocios') }}>Negócios</a></li>
             </ul>
-            <button className="aa-nav-cta" onClick={() => scrollTo('cta')}>Começar agora</button>
+            <button className="aa-nav-cta" onClick={goLogin}>Começar agora</button>
           </div>
         </nav>
 
@@ -330,7 +347,7 @@ export default function LandingPage() {
               <h1>Agendamentos que <em>acontecem sozinhos</em></h1>
               <p className="aa-hero-sub">Seu cliente manda uma mensagem. A IA entende, verifica a agenda, confirma e avisa. Você só precisa aparecer para atender.</p>
               <div className="aa-actions">
-                <button className="aa-btn aa-btn-primary" onClick={() => scrollTo('cta')}>Começar agora</button>
+                <button className="aa-btn aa-btn-primary" onClick={goLogin}>Começar agora</button>
                 <button className="aa-btn aa-btn-ghost" onClick={() => scrollTo('como-funciona')}>Ver como funciona</button>
               </div>
             </div>
@@ -475,7 +492,7 @@ export default function LandingPage() {
         {/* FOOTER */}
         <footer className="aa-footer">
           <div className="aa-footer-logo">Agenda<span>Agentic</span></div>
-          <p>Agendamento inteligente via WhatsApp · Desenvolvido com Claude AI</p>
+          <p>Agendamento inteligente via WhatsApp</p>
         </footer>
       </div>
     </>
