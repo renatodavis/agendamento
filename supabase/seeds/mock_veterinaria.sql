@@ -1,17 +1,23 @@
 -- ============================================================
 -- MOCK: Veterinária
--- Ativa o perfil e carrega dados de consultas veterinárias
--- (pacientes = tutores, nome inclui o animal para contexto)
 -- ============================================================
 
 -- 1. Ativa o perfil
 UPDATE profiles SET is_active = false;
 UPDATE profiles SET is_active = true WHERE domain_type = 'veterinaria';
 
--- 2. Atualiza nome e horário
+-- 2. Atualiza clinic_config
 INSERT INTO clinic_config (key, value) VALUES
   ('clinic_name',   '"PetCare Veterinária"'),
-  ('working_hours', '"Segunda a Sábado, 8h às 20h — Domingo emergências, 9h às 18h"')
+  ('working_hours', '"Segunda a Sábado, 8h às 20h — Domingo emergências, 9h às 18h"'),
+  ('services', '[
+    {"name": "Consulta Veterinária", "description": "Avaliação e diagnóstico animal"},
+    {"name": "Vacinação",            "description": "Imunização e prevenção"},
+    {"name": "Cirurgia Veterinária", "description": "Procedimentos cirúrgicos"},
+    {"name": "Banho e Tosa",         "description": "Higiene e estética pet"},
+    {"name": "Dermatologia Animal",  "description": "Pele e pelagem"},
+    {"name": "Retorno Pós-Cirurgia", "description": "Acompanhamento pós-operatório"}
+  ]')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 -- 3. Limpa dados de teste anteriores
@@ -21,7 +27,8 @@ DELETE FROM appointment_history WHERE appointment_id IN (
 DELETE FROM appointments WHERE patient_id::text LIKE 'f000%';
 DELETE FROM wa_sessions  WHERE phone LIKE '+5511000%';
 DELETE FROM patients     WHERE id::text LIKE 'f000%';
-DELETE FROM doctors      WHERE id::text LIKE 'f000%';
+-- Remove todos os médicos (seed + outros perfis) e insere apenas veterinários
+DELETE FROM doctors WHERE id::text LIKE 'f000%' OR id::text LIKE '11111111%';
 
 -- 4. Veterinários — UUID: f0000300-0000-0000-0000-00000000000N
 INSERT INTO doctors (id, name, specialty, crm) VALUES
@@ -52,6 +59,6 @@ ON CONFLICT DO NOTHING;
 
 -- Verificação
 SELECT 'Perfil ativo:'  AS info, name          FROM profiles WHERE is_active = true;
-SELECT 'Veterinários:'  AS info, COUNT(*)::text FROM doctors  WHERE id::text LIKE 'f0000300%';
+SELECT 'Veterinários:'  AS info, COUNT(*)::text FROM doctors;
 SELECT 'Tutores mock:'  AS info, COUNT(*)::text FROM patients WHERE id::text LIKE 'f000%';
 SELECT 'Agendamentos:'  AS info, status, COUNT(*) FROM appointments GROUP BY status ORDER BY status;

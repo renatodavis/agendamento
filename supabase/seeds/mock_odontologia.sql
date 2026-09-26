@@ -1,16 +1,23 @@
 -- ============================================================
 -- MOCK: Odontologia
--- Ativa o perfil e carrega dados de consultas odontológicas
 -- ============================================================
 
 -- 1. Ativa o perfil
 UPDATE profiles SET is_active = false;
 UPDATE profiles SET is_active = true WHERE domain_type = 'odontologia';
 
--- 2. Atualiza nome e horário
+-- 2. Atualiza clinic_config
 INSERT INTO clinic_config (key, value) VALUES
   ('clinic_name',   '"OdontoClin"'),
-  ('working_hours', '"Segunda a Sexta, 8h às 19h — Sábado, 8h às 14h"')
+  ('working_hours', '"Segunda a Sexta, 8h às 19h — Sábado, 8h às 14h"'),
+  ('services', '[
+    {"name": "Consulta Odontológica", "description": "Avaliação e diagnóstico"},
+    {"name": "Limpeza e Profilaxia",  "description": "Higiene e prevenção"},
+    {"name": "Tratamento de Canal",   "description": "Endodontia"},
+    {"name": "Aparelho Ortodôntico",  "description": "Correção do alinhamento"},
+    {"name": "Implante Dentário",     "description": "Reposição de dentes"},
+    {"name": "Clareamento Dental",    "description": "Estética e branqueamento"}
+  ]')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 -- 3. Limpa dados de teste anteriores
@@ -20,7 +27,8 @@ DELETE FROM appointment_history WHERE appointment_id IN (
 DELETE FROM appointments WHERE patient_id::text LIKE 'f000%';
 DELETE FROM wa_sessions  WHERE phone LIKE '+5511000%';
 DELETE FROM patients     WHERE id::text LIKE 'f000%';
-DELETE FROM doctors      WHERE id::text LIKE 'f000%';
+-- Remove todos os médicos (seed + outros perfis) e insere apenas dentistas
+DELETE FROM doctors WHERE id::text LIKE 'f000%' OR id::text LIKE '11111111%';
 
 -- 4. Dentistas — UUID: f0000200-0000-0000-0000-00000000000N
 INSERT INTO doctors (id, name, specialty, crm) VALUES
@@ -52,6 +60,6 @@ ON CONFLICT DO NOTHING;
 
 -- Verificação
 SELECT 'Perfil ativo:'   AS info, name          FROM profiles  WHERE is_active = true;
-SELECT 'Dentistas:'      AS info, COUNT(*)::text FROM doctors   WHERE id::text LIKE 'f0000200%';
+SELECT 'Dentistas:'      AS info, COUNT(*)::text FROM doctors;
 SELECT 'Pacientes mock:' AS info, COUNT(*)::text FROM patients  WHERE id::text LIKE 'f000%';
 SELECT 'Agendamentos:'   AS info, status, COUNT(*) FROM appointments GROUP BY status ORDER BY status;

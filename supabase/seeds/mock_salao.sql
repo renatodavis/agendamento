@@ -1,16 +1,23 @@
 -- ============================================================
 -- MOCK: Salão de Beleza
--- Ativa o perfil e carrega dados de atendimentos do salão
 -- ============================================================
 
 -- 1. Ativa o perfil
 UPDATE profiles SET is_active = false;
 UPDATE profiles SET is_active = true WHERE domain_type = 'salao';
 
--- 2. Atualiza nome e horário
+-- 2. Atualiza clinic_config
 INSERT INTO clinic_config (key, value) VALUES
   ('clinic_name',   '"Salão Bella Arte"'),
-  ('working_hours', '"Terça a Sábado, 9h às 19h — Segunda fechado"')
+  ('working_hours', '"Terça a Sábado, 9h às 19h — Segunda fechado"'),
+  ('services', '[
+    {"name": "Corte Feminino",        "description": "Corte e modelagem"},
+    {"name": "Coloração",             "description": "Mechas, luzes e coloração"},
+    {"name": "Escova Progressiva",    "description": "Alisamento e modelagem"},
+    {"name": "Hidratação Capilar",    "description": "Nutrição e recuperação dos fios"},
+    {"name": "Manicure e Pedicure",   "description": "Cuidados com unhas"},
+    {"name": "Design de Sobrancelha", "description": "Modelagem e micropigmentação"}
+  ]')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 -- 3. Limpa dados de teste anteriores
@@ -20,7 +27,8 @@ DELETE FROM appointment_history WHERE appointment_id IN (
 DELETE FROM appointments WHERE patient_id::text LIKE 'f000%';
 DELETE FROM wa_sessions  WHERE phone LIKE '+5511000%';
 DELETE FROM patients     WHERE id::text LIKE 'f000%';
-DELETE FROM doctors      WHERE id::text LIKE 'f000%';
+-- Remove todos os médicos (seed + outros perfis) e insere apenas profissionais do salão
+DELETE FROM doctors WHERE id::text LIKE 'f000%' OR id::text LIKE '11111111%';
 
 -- 4. Profissionais do salão — UUID: f0000500-0000-0000-0000-00000000000N
 INSERT INTO doctors (id, name, specialty, crm) VALUES
@@ -54,7 +62,7 @@ INSERT INTO appointments (patient_id, doctor_id, scheduled_at, status, type) VAL
 ON CONFLICT DO NOTHING;
 
 -- Verificação
-SELECT 'Perfil ativo:'    AS info, name          FROM profiles WHERE is_active = true;
-SELECT 'Profissionais:'   AS info, COUNT(*)::text FROM doctors  WHERE id::text LIKE 'f0000500%';
-SELECT 'Clientes mock:'   AS info, COUNT(*)::text FROM patients WHERE id::text LIKE 'f000%';
-SELECT 'Atendimentos:'    AS info, status, COUNT(*) FROM appointments GROUP BY status ORDER BY status;
+SELECT 'Perfil ativo:'   AS info, name          FROM profiles WHERE is_active = true;
+SELECT 'Profissionais:'  AS info, COUNT(*)::text FROM doctors;
+SELECT 'Clientes mock:'  AS info, COUNT(*)::text FROM patients WHERE id::text LIKE 'f000%';
+SELECT 'Atendimentos:'   AS info, status, COUNT(*) FROM appointments GROUP BY status ORDER BY status;

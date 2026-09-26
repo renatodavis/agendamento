@@ -1,16 +1,23 @@
 -- ============================================================
 -- MOCK: Academia / Personal Trainer
--- Ativa o perfil e carrega dados de sessões de treino
 -- ============================================================
 
 -- 1. Ativa o perfil
 UPDATE profiles SET is_active = false;
 UPDATE profiles SET is_active = true WHERE domain_type = 'personal';
 
--- 2. Atualiza nome e horário
+-- 2. Atualiza clinic_config
 INSERT INTO clinic_config (key, value) VALUES
   ('clinic_name',   '"FitLife Academia"'),
-  ('working_hours', '"Segunda a Sexta, 6h às 22h — Sábado, 7h às 18h — Domingo, 8h às 14h"')
+  ('working_hours', '"Segunda a Sexta, 6h às 22h — Sábado, 7h às 18h — Domingo, 8h às 14h"'),
+  ('services', '[
+    {"name": "Personal Training",        "description": "Treino personalizado individual"},
+    {"name": "Pilates",                  "description": "Condicionamento e flexibilidade"},
+    {"name": "Treino Funcional",         "description": "Exercícios funcionais"},
+    {"name": "Avaliação Física",         "description": "Composição corporal e performance"},
+    {"name": "Cardio e Emagrecimento",   "description": "Queima de gordura e resistência"},
+    {"name": "Personal Training — Força","description": "Musculação e hipertrofia"}
+  ]')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 -- 3. Limpa dados de teste anteriores
@@ -20,7 +27,8 @@ DELETE FROM appointment_history WHERE appointment_id IN (
 DELETE FROM appointments WHERE patient_id::text LIKE 'f000%';
 DELETE FROM wa_sessions  WHERE phone LIKE '+5511000%';
 DELETE FROM patients     WHERE id::text LIKE 'f000%';
-DELETE FROM doctors      WHERE id::text LIKE 'f000%';
+-- Remove todos os médicos (seed + outros perfis) e insere apenas personal trainers
+DELETE FROM doctors WHERE id::text LIKE 'f000%' OR id::text LIKE '11111111%';
 
 -- 4. Personal trainers — UUID: f0000400-0000-0000-0000-00000000000N
 INSERT INTO doctors (id, name, specialty, crm) VALUES
@@ -54,6 +62,6 @@ ON CONFLICT DO NOTHING;
 
 -- Verificação
 SELECT 'Perfil ativo:'      AS info, name          FROM profiles WHERE is_active = true;
-SELECT 'Personal trainers:' AS info, COUNT(*)::text FROM doctors  WHERE id::text LIKE 'f0000400%';
+SELECT 'Personal trainers:' AS info, COUNT(*)::text FROM doctors;
 SELECT 'Alunos mock:'       AS info, COUNT(*)::text FROM patients WHERE id::text LIKE 'f000%';
 SELECT 'Sessões:'           AS info, status, COUNT(*) FROM appointments GROUP BY status ORDER BY status;

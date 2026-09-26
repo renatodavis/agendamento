@@ -1,16 +1,23 @@
 -- ============================================================
 -- MOCK: Clínica Médica
--- Ativa o perfil e carrega dados de consultas médicas
 -- ============================================================
 
 -- 1. Ativa o perfil
 UPDATE profiles SET is_active = false;
 UPDATE profiles SET is_active = true WHERE domain_type = 'clinica';
 
--- 2. Atualiza nome e horário
+-- 2. Atualiza clinic_config
 INSERT INTO clinic_config (key, value) VALUES
   ('clinic_name',   '"Clínica São Lucas"'),
-  ('working_hours', '"Segunda a Sexta, 8h às 18h — Sábado, 8h às 12h"')
+  ('working_hours', '"Segunda a Sexta, 8h às 18h — Sábado, 8h às 12h"'),
+  ('services', '[
+    {"name": "Clínico Geral",  "description": "Consultas gerais, check-up, atestados"},
+    {"name": "Cardiologia",    "description": "Coração e sistema cardiovascular"},
+    {"name": "Dermatologia",   "description": "Pele, cabelo e unhas"},
+    {"name": "Pediatria",      "description": "Crianças e adolescentes"},
+    {"name": "Ortopedia",      "description": "Ossos, articulações e coluna"},
+    {"name": "Neurologia",     "description": "Sistema nervoso e cérebro"}
+  ]')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 -- 3. Limpa dados de teste anteriores
@@ -20,13 +27,20 @@ DELETE FROM appointment_history WHERE appointment_id IN (
 DELETE FROM appointments WHERE patient_id::text LIKE 'f000%';
 DELETE FROM wa_sessions  WHERE phone LIKE '+5511000%';
 DELETE FROM patients     WHERE id::text LIKE 'f000%';
-DELETE FROM doctors      WHERE id::text LIKE 'f000%';
+-- Remove médicos de outros perfis (f000%) e restaura os originais
+DELETE FROM doctors WHERE id::text LIKE 'f000%';
 
--- 4. Profissionais (usa seed inicial — doctors 11111111-*)
--- (já existem Dr. Cardoso, Dra. Lima, Dr. Fernandes, Dra. Costa, Dr. Alves, Dr. Santos)
+-- 4. Restaura médicos originais da clínica (caso tenham sido removidos)
+INSERT INTO doctors (id, name, specialty, crm) VALUES
+  ('11111111-0000-0000-0000-000000000001', 'Dr. Cardoso',   'Clínica Geral', 'CRM-SP 12345'),
+  ('11111111-0000-0000-0000-000000000002', 'Dra. Lima',     'Cardiologia',   'CRM-SP 23456'),
+  ('11111111-0000-0000-0000-000000000003', 'Dr. Fernandes', 'Dermatologia',  'CRM-SP 34567'),
+  ('11111111-0000-0000-0000-000000000004', 'Dra. Costa',    'Ortopedia',     'CRM-SP 45678'),
+  ('11111111-0000-0000-0000-000000000005', 'Dr. Alves',     'Pediatria',     'CRM-SP 56789'),
+  ('11111111-0000-0000-0000-000000000006', 'Dr. Santos',    'Neurologia',    'CRM-SP 67890')
+ON CONFLICT (id) DO NOTHING;
 
--- 5. Pacientes / clientes mock
--- UUID: f0000101-0000-0000-0000-00000000000N
+-- 5. Pacientes mock — UUID: f0000101-0000-0000-0000-00000000000N
 INSERT INTO patients (id, name, phone, convenio, photo_emoji, lgpd_consent_at) VALUES
   ('f0000101-0000-0000-0000-000000000001', 'Beatriz Nunes',    '+5511000010001', 'Unimed',         '👩',   now()),
   ('f0000101-0000-0000-0000-000000000002', 'Henrique Soares',  '+5511000010002', 'Bradesco Saúde', '👨',   now()),
@@ -47,7 +61,7 @@ INSERT INTO appointments (patient_id, doctor_id, scheduled_at, status, type) VAL
 ON CONFLICT DO NOTHING;
 
 -- Verificação
-SELECT 'Perfil ativo:'   AS info, name          FROM profiles WHERE is_active = true;
-SELECT 'Profissionais:'  AS info, COUNT(*)::text FROM doctors;
-SELECT 'Clientes mock:'  AS info, COUNT(*)::text FROM patients WHERE id::text LIKE 'f000%';
-SELECT 'Agendamentos:'   AS info, status, COUNT(*) FROM appointments GROUP BY status ORDER BY status;
+SELECT 'Perfil ativo:'  AS info, name          FROM profiles WHERE is_active = true;
+SELECT 'Médicos:'       AS info, COUNT(*)::text FROM doctors;
+SELECT 'Pacientes mock:'AS info, COUNT(*)::text FROM patients WHERE id::text LIKE 'f000%';
+SELECT 'Agendamentos:'  AS info, status, COUNT(*) FROM appointments GROUP BY status ORDER BY status;
