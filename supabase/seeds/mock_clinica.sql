@@ -9,8 +9,8 @@ UPDATE profiles SET is_active = true WHERE domain_type = 'clinica';
 
 -- 2. Atualiza nome e horário
 INSERT INTO clinic_config (key, value) VALUES
-  ('clinic_name',   'Clínica São Lucas'),
-  ('working_hours', 'Segunda a Sexta, 8h às 18h — Sábado, 8h às 12h')
+  ('clinic_name',   '"Clínica São Lucas"'),
+  ('working_hours', '"Segunda a Sexta, 8h às 18h — Sábado, 8h às 12h"')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 -- 3. Limpa dados de teste anteriores

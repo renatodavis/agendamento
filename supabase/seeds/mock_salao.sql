@@ -9,8 +9,8 @@ UPDATE profiles SET is_active = true WHERE domain_type = 'salao';
 
 -- 2. Atualiza nome e horário
 INSERT INTO clinic_config (key, value) VALUES
-  ('clinic_name',   'Salão Bella Arte'),
-  ('working_hours', 'Terça a Sábado, 9h às 19h — Segunda fechado')
+  ('clinic_name',   '"Salão Bella Arte"'),
+  ('working_hours', '"Terça a Sábado, 9h às 19h — Segunda fechado"')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 -- 3. Limpa dados de teste anteriores

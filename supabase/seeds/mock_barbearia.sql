@@ -9,8 +9,8 @@ UPDATE profiles SET is_active = true WHERE domain_type = 'barbearia';
 
 -- 2. Atualiza nome e horário
 INSERT INTO clinic_config (key, value) VALUES
-  ('clinic_name',   'Barbearia Kings Cut'),
-  ('working_hours', 'Terça a Sábado, 9h às 20h — Domingo, 9h às 15h — Segunda fechado')
+  ('clinic_name',   '"Barbearia Kings Cut"'),
+  ('working_hours', '"Terça a Sábado, 9h às 20h — Domingo, 9h às 15h — Segunda fechado"')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 -- 3. Limpa dados de teste anteriores

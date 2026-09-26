@@ -9,8 +9,8 @@ UPDATE profiles SET is_active = true WHERE domain_type = 'odontologia';
 
 -- 2. Atualiza nome e horário
 INSERT INTO clinic_config (key, value) VALUES
-  ('clinic_name',   'OdontoClin'),
-  ('working_hours', 'Segunda a Sexta, 8h às 19h — Sábado, 8h às 14h')
+  ('clinic_name',   '"OdontoClin"'),
+  ('working_hours', '"Segunda a Sexta, 8h às 19h — Sábado, 8h às 14h"')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 -- 3. Limpa dados de teste anteriores

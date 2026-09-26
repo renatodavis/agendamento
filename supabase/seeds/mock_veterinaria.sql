@@ -10,8 +10,8 @@ UPDATE profiles SET is_active = true WHERE domain_type = 'veterinaria';
 
 -- 2. Atualiza nome e horário
 INSERT INTO clinic_config (key, value) VALUES
-  ('clinic_name',   'PetCare Veterinária'),
-  ('working_hours', 'Segunda a Sábado, 8h às 20h — Domingo emergências, 9h às 18h')
+  ('clinic_name',   '"PetCare Veterinária"'),
+  ('working_hours', '"Segunda a Sábado, 8h às 20h — Domingo emergências, 9h às 18h"')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 -- 3. Limpa dados de teste anteriores
