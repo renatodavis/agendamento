@@ -31,6 +31,9 @@ DELETE FROM appointments
 WHERE patient_id::text LIKE 'f000%'
    OR doctor_id::text  LIKE 'f000%'
    OR doctor_id::text  LIKE '11111111%';
+DELETE FROM approval_requests
+WHERE doctor_id::text LIKE 'f000%'
+   OR doctor_id::text LIKE '11111111%';
 DELETE FROM wa_sessions  WHERE phone LIKE '+5511000%';
 DELETE FROM patients     WHERE id::text LIKE 'f000%';
 -- Remove todos os médicos (seed + outros perfis) e insere apenas dentistas
