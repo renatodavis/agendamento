@@ -26,14 +26,15 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  // Usuário não autenticado tentando acessar o painel → redireciona para /login
-  if (!user && pathname === '/') {
-    return NextResponse.redirect(new URL('/login', request.url))
+  // Usuário não autenticado tentando acessar rotas protegidas → landing page
+  const protectedPaths = ['/dashboard']
+  if (!user && protectedPaths.some(p => pathname.startsWith(p))) {
+    return NextResponse.redirect(new URL('/', request.url))
   }
 
-  // Usuário autenticado tentando acessar /login → redireciona para o painel
-  if (user && pathname === '/login') {
-    return NextResponse.redirect(new URL('/', request.url))
+  // Usuário autenticado tentando acessar /login ou / → painel
+  if (user && (pathname === '/login' || pathname === '/')) {
+    return NextResponse.redirect(new URL('/dashboard', request.url))
   }
 
   return supabaseResponse
