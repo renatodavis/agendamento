@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import { invalidateActiveProfileCache } from '@/lib/useActiveProfile'
 
 export type Profile = {
   id: string
@@ -8,7 +9,9 @@ export type Profile = {
   business_context: string
   out_of_scope_message: string
   specialties: { name: string; description: string }[]
+  professionals: { name: string; specialty: string }[]
   vocabulary: {
+    business_name?: string
     client?: string
     professional?: string
     professionals?: string
@@ -35,7 +38,9 @@ const EMPTY_PROFILE: Omit<Profile, 'id' | 'is_active'> = {
   business_context: '',
   out_of_scope_message: 'Lamento, mas não atendemos essa solicitação. Atendemos: {services_list}',
   specialties: [{ name: '', description: '' }],
+  professionals: [{ name: '', specialty: '' }],
   vocabulary: {
+    business_name: '',
     client: 'cliente',
     professional: 'profissional',
     professionals: 'profissionais',
@@ -94,6 +99,7 @@ export default function ProfilesPanel({ onClose }: { onClose: () => void }) {
     try {
       const res = await fetch(`/api/profiles/${id}/activate`, { method: 'POST' })
       if (!res.ok) throw new Error((await res.json()).error)
+      invalidateActiveProfileCache()
       await load()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Erro ao ativar perfil')
@@ -137,7 +143,11 @@ export default function ProfilesPanel({ onClose }: { onClose: () => void }) {
   }
 
   function openEdit(p: Profile) {
-    setEditing({ ...p, specialties: p.specialties?.length ? [...p.specialties] : [{ name: '', description: '' }] })
+    setEditing({
+      ...p,
+      specialties: p.specialties?.length ? [...p.specialties] : [{ name: '', description: '' }],
+      professionals: p.professionals?.length ? [...p.professionals] : [{ name: '', specialty: '' }],
+    })
     setIsNew(false)
   }
 
@@ -213,6 +223,14 @@ export default function ProfilesPanel({ onClose }: { onClose: () => void }) {
           {/* Vocabulário */}
           <div>
             <span style={label}>Vocabulário da IA</span>
+            {/* business_name em destaque */}
+            <div style={{ marginBottom: 8, padding: '8px 10px', borderRadius: 8, background: 'color-mix(in srgb, var(--green) 8%, var(--card))', border: '1px solid color-mix(in srgb, var(--green) 30%, transparent)' }}>
+              <span style={{ ...label, fontSize: 10, color: 'var(--green)' }}>Nome do Negócio (sobrescreve o nome padrão para a IA)</span>
+              <input style={input} placeholder="Ex: Clínica São Lucas, Barbearia do João... (deixe vazio para usar o nome padrão)"
+                value={(e.vocabulary as Record<string, string>)?.business_name ?? ''}
+                onChange={ev => setVoc({ business_name: ev.target.value })}
+              />
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8 }}>
               {[
                 { k: 'client',        lbl: 'Cliente/Paciente' },
@@ -233,7 +251,27 @@ export default function ProfilesPanel({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          {/* Especialidades */}
+          {/* Profissionais */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={label}>Profissionais / Especialistas</span>
+              <button style={btn({ fontSize: 10 })} onClick={() => setE({ professionals: [...(e.professionals ?? []), { name: '', specialty: '' }] })}>+ Adicionar</button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {(e.professionals ?? []).map((p, idx) => (
+                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 2fr auto', gap: 6, alignItems: 'center' }}>
+                  <input style={input} placeholder="Nome" value={p.name}
+                    onChange={ev => { const ps = [...(e.professionals ?? [])]; ps[idx] = { ...ps[idx], name: ev.target.value }; setE({ professionals: ps }) }} />
+                  <input style={input} placeholder="Especialidade" value={p.specialty}
+                    onChange={ev => { const ps = [...(e.professionals ?? [])]; ps[idx] = { ...ps[idx], specialty: ev.target.value }; setE({ professionals: ps }) }} />
+                  <button style={btn({ color: 'var(--red, #e53)', padding: '5px 8px' })}
+                    onClick={() => setE({ professionals: (e.professionals ?? []).filter((_, i) => i !== idx) })}>✕</button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Especialidades / Serviços */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
               <span style={label}>Especialidades / Serviços</span>

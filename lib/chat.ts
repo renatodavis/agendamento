@@ -537,10 +537,11 @@ async function loadClinicConfig(db: SupabaseClient) {
   ])
   const cfg = Object.fromEntries((cfgRows ?? []).map(r => [r.key, r.value]))
 
-  // Se há perfil ativo, usa as especialidades e vocabulário dele
+  // Se há perfil ativo, usa as especialidades, profissionais e vocabulário dele
   const profile = activeProfile as {
     specialties: ServiceConfig[]
-    vocabulary: Partial<ProfileVocabulary>
+    professionals: DoctorInfo[]
+    vocabulary: Partial<ProfileVocabulary> & { business_name?: string }
     out_of_scope_message: string
     business_context: string
   } | null
@@ -558,17 +559,28 @@ async function loadClinicConfig(db: SupabaseClient) {
           { name: 'Ortopedia',      description: 'Ossos e articulações' },
         ]
 
+  // Profissionais: usa lista do perfil quando ativo, senão usa tabela doctors
+  const professionals: DoctorInfo[] = profile
+    ? (profile.professionals?.length ? profile.professionals : [])
+    : (doctorsData ?? []) as DoctorInfo[]
+
   const vocabulary: ProfileVocabulary = { ...DEFAULT_VOCABULARY, ...(profile?.vocabulary ?? {}) }
 
+  // Nome do negócio: vocabulary.business_name do perfil tem prioridade
+  const businessNameFromProfile = profile?.vocabulary?.business_name
+  const clinicName = (businessNameFromProfile && businessNameFromProfile.trim())
+    ? businessNameFromProfile.trim()
+    : (typeof cfg.clinic_name === 'string' ? cfg.clinic_name : 'Clínica São Lucas')
+
   return {
-    clinicName:         typeof cfg.clinic_name === 'string' ? cfg.clinic_name : 'Clínica São Lucas',
+    clinicName,
     workingHours:       typeof cfg.working_hours === 'string' ? cfg.working_hours : 'Segunda a Sexta, 8h às 18h',
     services,
     outOfScopeResponse: profile?.out_of_scope_message
       ?? (typeof cfg.out_of_scope_response === 'string' ? cfg.out_of_scope_response : 'Lamento, mas não atendemos essa especialidade. Posso ajudar com: {services_list}'),
     businessContext:    profile?.business_context ?? '',
     vocabulary,
-    doctors: (doctorsData ?? []) as DoctorInfo[],
+    doctors: professionals,
   }
 }
 

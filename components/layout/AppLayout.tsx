@@ -9,6 +9,7 @@ import AgendaBottomPanel from '@/components/agenda/AgendaBottomPanel'
 import { useApprovalCount } from '@/components/agenda/ApprovalPanel'
 import { useClinicName } from '@/lib/useClinicName'
 import ProfilesPanel from '@/components/profiles/ProfilesPanel'
+import { useActiveProfile, invalidateActiveProfileCache } from '@/lib/useActiveProfile'
 
 const EMPTY_PIPELINE: PipelineState = { active: [], done: [], workflow: null }
 
@@ -41,6 +42,7 @@ export default function AppLayout() {
 
   const [aiAlert, setAiAlert] = useState(false)
   const [profilesOpen, setProfilesOpen] = useState(false)
+  const activeProfile = useActiveProfile()
 
   useEffect(() => {
     async function checkAi() {
@@ -153,13 +155,13 @@ export default function AppLayout() {
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0,
             background: 'linear-gradient(135deg, var(--green) 0%, #0A7A5E 100%)',
             boxShadow: '0 2px 6px rgba(13,158,119,.35)',
-          }}>🏥</div>
+          }}>{activeProfile?.vocabulary?.emoji ?? '🏥'}</div>
           <div>
             <div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1, letterSpacing: '-.01em', color: 'var(--foreground)' }}>
               {clinicName}
             </div>
             <div style={{ fontSize: 9, marginTop: 3, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.06em' }}>
-              Sistema de IA ·{' '}
+              {activeProfile ? activeProfile.name : 'Sistema de IA'} ·{' '}
               <span style={{ color: 'var(--green)', fontWeight: 600 }}>● Online</span>
             </div>
           </div>
