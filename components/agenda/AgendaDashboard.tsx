@@ -4,6 +4,7 @@ import { useAppointments } from '@/lib/useAppointments'
 import type { Appointment, AppointmentStatus, HistoryKind } from '@/types'
 import ChatPanel from '@/components/chat/ChatPanel'
 import { useClinicName } from '@/lib/useClinicName'
+import { useActiveProfile, profileHasConvenio } from '@/lib/useActiveProfile'
 
 // ── Status config ─────────────────────────────────────────────────────
 const STATUS: Record<AppointmentStatus, { color: string; label: string; icon: string; fill: boolean }> = {
@@ -94,8 +95,8 @@ function ApptRow({ appt, selected, onSelect }: {
 }
 
 // ── Appointment detail ────────────────────────────────────────────────
-function ApptDetail({ appt, onAttend, onCancel, detailRef }: {
-  appt: Appointment | null
+function ApptDetail({ appt, showConvenio, onAttend, onCancel, detailRef }: {
+  appt: Appointment | null; showConvenio: boolean
   onAttend: (id: string) => void
   onCancel: (id: string, reason: string, cancelledBy: 'clinic' | 'patient') => void
   detailRef: React.RefObject<HTMLDivElement | null>
@@ -132,7 +133,7 @@ function ApptDetail({ appt, onAttend, onCancel, detailRef }: {
         <div className="min-w-0 flex-1">
           <div className="text-sm font-bold">{appt.patient?.name}</div>
           <div className="text-[10px] mt-0.5" style={{ color: 'var(--muted)' }}>
-            {appt.patient?.convenio} · {appt.type}
+            {showConvenio && appt.patient?.convenio ? `${appt.patient.convenio} · ` : ''}{appt.type}
           </div>
           <span className="inline-flex items-center gap-1 text-[10px] font-bold mt-1 px-2 py-0.5 rounded-full border"
             style={{ color: sc.color, borderColor: sc.color, background: `${sc.color}18` }}>
@@ -255,7 +256,9 @@ function ApptDetail({ appt, onAttend, onCancel, detailRef }: {
 
 // ── Main dashboard ────────────────────────────────────────────────────
 export default function AgendaDashboard() {
-  const clinicName = useClinicName()
+  const clinicName    = useClinicName()
+  const activeProfile = useActiveProfile()
+  const showConvenio  = profileHasConvenio(activeProfile)
   const [dayOffset, setDayOffset] = useState(0)
   const [selId, setSelId]         = useState<string | null>(null)
   const [filter, setFilter]       = useState<string>('todos')
@@ -479,13 +482,13 @@ export default function AgendaDashboard() {
 
           {/* Detail */}
           <div className="hidden md:flex flex-col flex-1 min-h-0" style={{ background: 'var(--panel)' }}>
-            <ApptDetail appt={selAppt} onAttend={handleAttend} onCancel={handleCancel} detailRef={detailRef} />
+            <ApptDetail appt={selAppt} showConvenio={showConvenio} onAttend={handleAttend} onCancel={handleCancel} detailRef={detailRef} />
           </div>
         </div>
 
         {/* Mobile detail (below list) */}
         <div className="md:hidden border-t" style={{ borderColor: 'var(--border)', background: 'var(--panel)' }}>
-          <ApptDetail appt={selAppt} onAttend={handleAttend} onCancel={handleCancel} detailRef={detailRef} />
+          <ApptDetail appt={selAppt} showConvenio={showConvenio} onAttend={handleAttend} onCancel={handleCancel} detailRef={detailRef} />
         </div>
       </div>
     </div>

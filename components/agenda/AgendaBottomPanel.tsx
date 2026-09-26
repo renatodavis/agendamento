@@ -7,6 +7,7 @@ import ClinicConfigPanel from '@/components/settings/ClinicConfigPanel'
 import DoctorSchedulesPanel from '@/components/settings/DoctorSchedulesPanel'
 import ContactsPanel from '@/components/contacts/ContactsPanel'
 import AgendaQueueView from './AgendaQueueView'
+import { useActiveProfile, profileHasConvenio } from '@/lib/useActiveProfile'
 
 const DOCTOR_COLORS = ['#3B9EFF', '#14C38E', '#F0A500', '#A78BFA', '#FB923C', '#F472B6', '#22D3EE', '#EF4444']
 
@@ -45,8 +46,8 @@ function nowT() {
 }
 
 // ── Row ─────────────────────────────────────────────────────────────
-function ApptRow({ appt, selected, compact, onSelect, onAttend }: {
-  appt: Appointment; selected: boolean; compact?: boolean
+function ApptRow({ appt, selected, compact, showConvenio, onSelect, onAttend }: {
+  appt: Appointment; selected: boolean; compact?: boolean; showConvenio: boolean
   onSelect: () => void; onAttend: (id: string) => void
 }) {
   const sc = STATUS[appt.status]
@@ -85,7 +86,7 @@ function ApptRow({ appt, selected, compact, onSelect, onAttend }: {
         <div className="truncate mt-px" style={{ fontSize: 10, color: 'var(--muted)' }}>
           {compact ? appt.doctor?.name : `${appt.doctor?.name}${appt.doctor?.specialty ? ' · ' + appt.doctor.specialty : ''}`}
         </div>
-        {!compact && appt.patient?.convenio && (
+        {showConvenio && !compact && appt.patient?.convenio && (
           <span className="inline-flex mt-1 font-medium px-1.5 py-px rounded border"
             style={{ fontSize: 10, color: sc.color, borderColor: `${sc.color}60`, background: `${sc.color}10` }}>
             {appt.patient.convenio}
@@ -121,8 +122,8 @@ function ApptRow({ appt, selected, compact, onSelect, onAttend }: {
 }
 
 // ── Detail ───────────────────────────────────────────────────────────
-function ApptDetail({ appt, onAttend, onCancel, detailRef }: {
-  appt: Appointment | null
+function ApptDetail({ appt, showConvenio, onAttend, onCancel, detailRef }: {
+  appt: Appointment | null; showConvenio: boolean
   onAttend: (id: string) => void
   onCancel: (id: string, reason: string, cancelledBy: 'clinic' | 'patient') => void
   detailRef: React.RefObject<HTMLDivElement | null>
@@ -149,7 +150,7 @@ function ApptDetail({ appt, onAttend, onCancel, detailRef }: {
         <span className="text-2xl">{appt.patient?.photo_emoji ?? '👤'}</span>
         <div className="flex-1 min-w-0">
           <div className="text-sm font-bold truncate">{appt.patient?.name}</div>
-          <div className="text-[10px]" style={{ color: 'var(--muted)' }}>{appt.patient?.convenio} · {appt.type}</div>
+          <div className="text-[10px]" style={{ color: 'var(--muted)' }}>{showConvenio && appt.patient?.convenio ? `${appt.patient.convenio} · ` : ''}{appt.type}</div>
           <span className="inline-flex items-center gap-1 text-[9px] font-bold mt-0.5 px-1.5 py-0.5 rounded-full border"
             style={{ color: sc.color, borderColor: sc.color, background: `${sc.color}18` }}>
             {sc.icon} {sc.label}
@@ -254,6 +255,8 @@ export default function AgendaBottomPanel({ approvalCount = 0 }: { approvalCount
   const [filter, setFilter]             = useState('todos')
   const [doctorFilter, setDoctorFilter] = useState<string | null>(null)
   const detailRef                       = useRef<HTMLDivElement>(null)
+  const activeProfile                   = useActiveProfile()
+  const showConvenio                    = profileHasConvenio(activeProfile)
 
   const { appointments, loading, error, updateStatus } = useAppointments(dayOffset)
   const selAppt = appointments.find(a => a.id === selId) ?? null
@@ -559,7 +562,7 @@ export default function AgendaBottomPanel({ approvalCount = 0 }: { approvalCount
           )}
           {!loading && filtered.map(a => (
             <ApptRow key={a.id} appt={a} selected={selId === a.id}
-              compact={!!selAppt}
+              compact={!!selAppt} showConvenio={showConvenio}
               onSelect={() => setSelId(prev => prev === a.id ? null : a.id)}
               onAttend={handleAttend} />
           ))}
@@ -568,7 +571,7 @@ export default function AgendaBottomPanel({ approvalCount = 0 }: { approvalCount
         {/* Detail — only when selected */}
         {selAppt && (
           <div className="flex-1 overflow-y-auto" style={{ background: 'var(--panel)' }}>
-            <ApptDetail appt={selAppt} onAttend={handleAttend} onCancel={handleCancel} detailRef={detailRef} />
+            <ApptDetail appt={selAppt} showConvenio={showConvenio} onAttend={handleAttend} onCancel={handleCancel} detailRef={detailRef} />
           </div>
         )}
       </div>

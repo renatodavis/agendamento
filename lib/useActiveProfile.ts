@@ -30,3 +30,9 @@ export function useActiveProfile(): ActiveProfile {
 export function invalidateActiveProfileCache() {
   cached = undefined
 }
+
+// Convênio só se aplica a perfis de saúde (business_noun contém "clínica")
+export function profileHasConvenio(profile: ActiveProfile): boolean {
+  const noun = profile?.vocabulary?.business_noun?.toLowerCase() ?? ''
+  return noun.includes('clínica') || noun.includes('consultório')
+}

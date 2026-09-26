@@ -1,6 +1,7 @@
 'use client'
 import { useMemo } from 'react'
 import type { Appointment, AppointmentStatus } from '@/types'
+import { useActiveProfile, profileHasConvenio } from '@/lib/useActiveProfile'
 
 // ── Status config ─────────────────────────────────────────────────────────────
 const S: Record<AppointmentStatus, { color: string; bg: string; label: string; icon: string }> = {
@@ -20,12 +21,13 @@ function fmtTime(iso: string) {
 type CardProps = {
   appt: Appointment
   isNext: boolean
+  showConvenio: boolean
   onAttend: (id: string) => void
   onSelect: (appt: Appointment) => void
   selected: boolean
 }
 
-function AppointmentCard({ appt, isNext, onAttend, onSelect, selected }: CardProps) {
+function AppointmentCard({ appt, isNext, showConvenio, onAttend, onSelect, selected }: CardProps) {
   const sc = S[appt.status]
   const canAttend = appt.status !== 'atendida' && appt.status !== 'cancelada'
   const isAttended = appt.status === 'atendida'
@@ -106,7 +108,7 @@ function AppointmentCard({ appt, isNext, onAttend, onSelect, selected }: CardPro
 
         {/* Tags: convenio + type */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-          {appt.patient?.convenio && (
+          {showConvenio && appt.patient?.convenio && (
             <span style={{
               fontSize: 8, fontWeight: 600, padding: '2px 6px',
               borderRadius: 20, border: `1px solid ${sc.color}60`,
@@ -285,6 +287,9 @@ export default function AgendaQueueView({
   appointments, loading, dayOffset, onDayChange,
   onAttend, onSwitchView, selectedId, onSelect,
 }: Props) {
+  const profile = useActiveProfile()
+  const showConvenio = profileHasConvenio(profile)
+
   // The "next" card: first non-attended, non-cancelled, ordered by time
   const nextId = useMemo(() => {
     const eligible = appointments.filter(
@@ -344,6 +349,7 @@ export default function AgendaQueueView({
               key={appt.id}
               appt={appt}
               isNext={appt.id === nextId}
+              showConvenio={showConvenio}
               onAttend={onAttend}
               onSelect={onSelect}
               selected={selectedId === appt.id}

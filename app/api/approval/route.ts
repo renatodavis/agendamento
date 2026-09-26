@@ -11,12 +11,18 @@ export async function GET(req: NextRequest) {
   const db = createServerClient()
   const { data, error } = await db
     .from('approval_requests')
-    .select('*, doctor:doctors(name, specialty)')
+    .select('*, doctor:doctors(name, specialty), session:wa_sessions(phone)')
     .eq('status', 'pending')
     .order('created_at', { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data ?? [])
+
+  // Flatten session.phone → patient_phone for the UI
+  const rows = (data ?? []).map((r: Record<string, unknown> & { session?: { phone?: string } | null }) => {
+    const { session, ...rest } = r
+    return { ...rest, patient_phone: session?.phone ?? null }
+  })
+  return NextResponse.json(rows)
 }
 
 // ── GET (count): usado pelo badge ─────────────────────────────────────

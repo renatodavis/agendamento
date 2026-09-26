@@ -32,6 +32,7 @@ type ApprovalRequest = {
   details: ApptDetails | null
   status: string
   created_at: string
+  patient_phone: string | null
   doctor: { name: string; specialty: string } | null
 }
 
@@ -157,8 +158,22 @@ export default function ApprovalPanel() {
 
             {/* Header */}
             <div className="px-3 pt-2.5 pb-0 flex items-center justify-between gap-2">
-              <div>
-                <div className="text-[12px] font-bold leading-tight">{req.patient_name ?? 'Paciente'}</div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <div className="text-[12px] font-bold leading-tight truncate">{req.patient_name ?? 'Paciente'}</div>
+                  {req.patient_phone && (
+                    <a
+                      href={`https://wa.me/${req.patient_phone.replace(/\D/g, '')}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={`Abrir conversa WhatsApp com ${req.patient_name ?? 'paciente'}`}
+                      className="shrink-0 text-[11px] px-1.5 py-0.5 rounded-full font-bold border transition-opacity hover:opacity-80"
+                      style={{ color: '#25D366', borderColor: '#25D36660', background: '#25D36612', textDecoration: 'none' }}
+                    >
+                      💬
+                    </a>
+                  )}
+                </div>
                 {req.doctor && (
                   <div className="text-[10px]" style={{ color: 'var(--muted)' }}>
                     {req.doctor.name} · {req.doctor.specialty}
