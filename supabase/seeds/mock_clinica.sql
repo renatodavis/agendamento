@@ -20,17 +20,21 @@ INSERT INTO clinic_config (key, value) VALUES
   ]')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
--- 3. Limpa dados de teste anteriores
+-- 3. Limpa WhatsApp (mensagens antes das sessões por FK)
+DELETE FROM wa_messages;
+DELETE FROM approval_requests;
+DELETE FROM wa_sessions;
+
+-- 4. Limpa agendamentos e profissionais de outros perfis
 DELETE FROM appointment_history WHERE appointment_id IN (
   SELECT id FROM appointments WHERE patient_id::text LIKE 'f000%'
 );
-DELETE FROM appointments WHERE patient_id::text LIKE 'f000%';
-DELETE FROM wa_sessions  WHERE phone LIKE '+5511000%';
-DELETE FROM patients     WHERE id::text LIKE 'f000%';
+DELETE FROM appointments    WHERE patient_id::text LIKE 'f000%';
+DELETE FROM patients        WHERE id::text LIKE 'f000%';
 -- Remove médicos de outros perfis (f000%) e restaura os originais
 DELETE FROM doctors WHERE id::text LIKE 'f000%';
 
--- 4. Restaura médicos originais da clínica (caso tenham sido removidos)
+-- 5. Restaura médicos originais da clínica (caso tenham sido removidos)
 INSERT INTO doctors (id, name, specialty, crm) VALUES
   ('11111111-0000-0000-0000-000000000001', 'Dr. Cardoso',   'Clínica Geral', 'CRM-SP 12345'),
   ('11111111-0000-0000-0000-000000000002', 'Dra. Lima',     'Cardiologia',   'CRM-SP 23456'),
@@ -40,7 +44,7 @@ INSERT INTO doctors (id, name, specialty, crm) VALUES
   ('11111111-0000-0000-0000-000000000006', 'Dr. Santos',    'Neurologia',    'CRM-SP 67890')
 ON CONFLICT (id) DO NOTHING;
 
--- 5. Pacientes mock — UUID: f0000101-0000-0000-0000-00000000000N
+-- 6. Pacientes mock — UUID: f0000101-0000-0000-0000-00000000000N
 INSERT INTO patients (id, name, phone, convenio, photo_emoji, lgpd_consent_at) VALUES
   ('f0000101-0000-0000-0000-000000000001', 'Beatriz Nunes',    '+5511000010001', 'Unimed',         '👩',   now()),
   ('f0000101-0000-0000-0000-000000000002', 'Henrique Soares',  '+5511000010002', 'Bradesco Saúde', '👨',   now()),
@@ -49,7 +53,7 @@ INSERT INTO patients (id, name, phone, convenio, photo_emoji, lgpd_consent_at) V
   ('f0000101-0000-0000-0000-000000000005', 'Camila Dias',      '+5511000010005', 'SulAmérica',     '👧',   now())
 ON CONFLICT (id) DO NOTHING;
 
--- 6. Agendamentos mock
+-- 7. Agendamentos mock
 INSERT INTO appointments (patient_id, doctor_id, scheduled_at, status, type) VALUES
   ('f0000101-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001', NOW() + INTERVAL '2 hours',  'agendada',   'Consulta'),
   ('f0000101-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000002', NOW() + INTERVAL '26 hours', 'confirmada', 'Consulta'),
@@ -61,7 +65,7 @@ INSERT INTO appointments (patient_id, doctor_id, scheduled_at, status, type) VAL
 ON CONFLICT DO NOTHING;
 
 -- Verificação
-SELECT 'Perfil ativo:'  AS info, name          FROM profiles WHERE is_active = true;
-SELECT 'Médicos:'       AS info, COUNT(*)::text FROM doctors;
-SELECT 'Pacientes mock:'AS info, COUNT(*)::text FROM patients WHERE id::text LIKE 'f000%';
-SELECT 'Agendamentos:'  AS info, status, COUNT(*) FROM appointments GROUP BY status ORDER BY status;
+SELECT 'Perfil ativo:'   AS info, name          FROM profiles WHERE is_active = true;
+SELECT 'Médicos:'        AS info, COUNT(*)::text FROM doctors;
+SELECT 'Pacientes mock:' AS info, COUNT(*)::text FROM patients WHERE id::text LIKE 'f000%';
+SELECT 'Agendamentos:'   AS info, status, COUNT(*) FROM appointments GROUP BY status ORDER BY status;
