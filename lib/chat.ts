@@ -509,78 +509,124 @@ async function consultarAgendamentos(
   }
 }
 
+type ProfileVocabulary = {
+  client: string
+  professional: string
+  professionals: string
+  appointment: string
+  business_noun: string
+  emoji: string
+  urgency_redirect: string
+}
+
+const DEFAULT_VOCABULARY: ProfileVocabulary = {
+  client: 'paciente',
+  professional: 'médico',
+  professionals: 'médicos',
+  appointment: 'consulta',
+  business_noun: 'clínica',
+  emoji: '🏥',
+  urgency_redirect: 'SAMU (192) ou pronto-socorro',
+}
+
 async function loadClinicConfig(db: SupabaseClient) {
-  const [{ data: cfgRows }, { data: doctorsData }] = await Promise.all([
+  const [{ data: cfgRows }, { data: doctorsData }, { data: activeProfile }] = await Promise.all([
     db.from('clinic_config').select('key, value'),
     db.from('doctors').select('name, specialty').order('specialty'),
+    db.from('profiles').select('*').eq('is_active', true).maybeSingle(),
   ])
   const cfg = Object.fromEntries((cfgRows ?? []).map(r => [r.key, r.value]))
-  const services: ServiceConfig[] = Array.isArray(cfg.services)
-    ? (cfg.services as ServiceConfig[])
-    : [
-        { name: 'Clínico Geral',  description: 'Consultas gerais' },
-        { name: 'Cardiologia',    description: 'Coração e cardiovascular' },
-        { name: 'Dermatologia',   description: 'Pele, cabelo e unhas' },
-        { name: 'Pediatria',      description: 'Atendimento infantil' },
-        { name: 'Ginecologia',    description: 'Saúde da mulher' },
-        { name: 'Ortopedia',      description: 'Ossos e articulações' },
-      ]
+
+  // Se há perfil ativo, usa as especialidades e vocabulário dele
+  const profile = activeProfile as {
+    specialties: ServiceConfig[]
+    vocabulary: Partial<ProfileVocabulary>
+    out_of_scope_message: string
+    business_context: string
+  } | null
+
+  const services: ServiceConfig[] = profile?.specialties?.length
+    ? profile.specialties
+    : Array.isArray(cfg.services)
+      ? (cfg.services as ServiceConfig[])
+      : [
+          { name: 'Clínico Geral',  description: 'Consultas gerais' },
+          { name: 'Cardiologia',    description: 'Coração e cardiovascular' },
+          { name: 'Dermatologia',   description: 'Pele, cabelo e unhas' },
+          { name: 'Pediatria',      description: 'Atendimento infantil' },
+          { name: 'Ginecologia',    description: 'Saúde da mulher' },
+          { name: 'Ortopedia',      description: 'Ossos e articulações' },
+        ]
+
+  const vocabulary: ProfileVocabulary = { ...DEFAULT_VOCABULARY, ...(profile?.vocabulary ?? {}) }
+
   return {
     clinicName:         typeof cfg.clinic_name === 'string' ? cfg.clinic_name : 'Clínica São Lucas',
     workingHours:       typeof cfg.working_hours === 'string' ? cfg.working_hours : 'Segunda a Sexta, 8h às 18h',
     services,
-    outOfScopeResponse: typeof cfg.out_of_scope_response === 'string' ? cfg.out_of_scope_response : 'Lamento, mas não atendemos essa especialidade. Posso ajudar com: {services_list}',
+    outOfScopeResponse: profile?.out_of_scope_message
+      ?? (typeof cfg.out_of_scope_response === 'string' ? cfg.out_of_scope_response : 'Lamento, mas não atendemos essa especialidade. Posso ajudar com: {services_list}'),
+    businessContext:    profile?.business_context ?? '',
+    vocabulary,
     doctors: (doctorsData ?? []) as DoctorInfo[],
   }
 }
 
 function buildSystemPrompt(cfg: Awaited<ReturnType<typeof loadClinicConfig>>): string {
+  const voc = cfg.vocabulary
   const servicesList = cfg.services.map(s => `• *${s.name}* — ${s.description}`).join('\n')
   const serviceNames = cfg.services.map(s => s.name).join(', ')
-  const doctorsList = cfg.doctors.length > 0
+  const professionalsList = cfg.doctors.length > 0
     ? cfg.doctors.map(d => `• ${d.name} — ${d.specialty}`).join('\n')
-    : '(nenhum médico cadastrado ainda)'
-  const outOfScope = cfg.outOfScopeResponse.replace('{clinic_name}', cfg.clinicName).replace('{services_list}', servicesList)
-  const welcomeMsg =
-    `Olá! Seja bem-vindo(a) à *${cfg.clinicName}*! 🏥\n\n` +
-    `Atendemos as seguintes especialidades:\n${servicesList}\n\n` +
-    `${cfg.doctors.length > 0 ? `👨‍⚕️ Nossos médicos:\n${doctorsList}\n\n` : ''}` +
-    `⏰ Horário de atendimento: ${cfg.workingHours}\n\nComo posso ajudar?`
-  return `Você é o assistente virtual da ${cfg.clinicName}, responsável pelo atendimento de pacientes via WhatsApp.
+    : `(nenhum ${voc.professional} cadastrado ainda)`
+  const outOfScope = cfg.outOfScopeResponse
+    .replace('{clinic_name}', cfg.clinicName)
+    .replace('{services_list}', servicesList)
+  const urgencyLine = voc.urgency_redirect
+    ? `- Em caso de urgência aparente (mesmo fora do escopo) → redirecione para ${voc.urgency_redirect} e informe que não oferecemos esse atendimento.`
+    : `- Em caso de urgência aparente → informe que não oferecemos esse atendimento e oriente o ${voc.client} a buscar atendimento de emergência.`
 
-DADOS DA CLÍNICA (use SEMPRE estas informações — nunca invente dados):
+  const welcomeMsg =
+    `Olá! Seja bem-vindo(a) à *${cfg.clinicName}*! ${voc.emoji}\n\n` +
+    `Atendemos os seguintes serviços:\n${servicesList}\n\n` +
+    `${cfg.doctors.length > 0 ? `${voc.emoji} Nossos ${voc.professionals}:\n${professionalsList}\n\n` : ''}` +
+    `⏰ Horário de atendimento: ${cfg.workingHours}\n\nComo posso ajudar?`
+
+  return `Você é o assistente virtual da ${cfg.clinicName}, responsável pelo atendimento de ${voc.client}s via WhatsApp.
+${cfg.businessContext ? `\nCONTEXTO DO NEGÓCIO:\n${cfg.businessContext}\n` : ''}
+DADOS DO NEGÓCIO (use SEMPRE estas informações — nunca invente dados):
 Nome: ${cfg.clinicName}
 Horário: ${cfg.workingHours}
 
-ESPECIALIDADES E SERVIÇOS DISPONÍVEIS:
+SERVIÇOS DISPONÍVEIS:
 ${servicesList}
 
-MÉDICOS CADASTRADOS:
-${doctorsList}
+${voc.professionals.toUpperCase()} CADASTRADOS:
+${professionalsList}
 
 MENSAGEM DE BOAS-VINDAS (use quando for o primeiro contato ou saudação sem contexto):
 ${welcomeMsg}
 
 REGRA DE ESCOPO (OBRIGATÓRIA):
-- Atenda APENAS solicitações relacionadas às especialidades listadas acima: ${serviceNames}
-- Se o paciente solicitar especialidade NÃO listada, responda: "${outOfScope}"
-- Nunca tente agendar para especialidade fora da lista.
-- Em caso de urgência aparente (mesmo fora do escopo) → redirecione ao SAMU (192) ou pronto-socorro e informe que a clínica não oferece esse atendimento.`
+- Atenda APENAS solicitações relacionadas aos serviços listados acima: ${serviceNames}
+- Se o ${voc.client} solicitar serviço NÃO listado, responda: "${outOfScope}"
+- Nunca tente agendar para serviço fora da lista.
+${urgencyLine}`
 }
 
-function buildCoordinatorPrompt(clinicName: string) { return `Você é o Coordenador Clínico da ${clinicName}, responsável por orquestrar o atendimento de pacientes via WhatsApp.
+function buildCoordinatorPrompt(clinicName: string, voc: ProfileVocabulary = DEFAULT_VOCABULARY) { return `Você é o assistente de ${voc.appointment}s da ${clinicName}, responsável por orquestrar o atendimento de ${voc.client}s via WhatsApp.
 
 Seu papel:
-- Identificar a intenção do paciente (agendamento, urgência, cadastro, histórico, receita)
+- Identificar a intenção do ${voc.client} (${voc.appointment}, urgência, cadastro, histórico)
 - Delegar para o fluxo correto usando as ferramentas disponíveis
 - Nunca emitir diagnóstico, prescrição ou conduta clínica
-- Qualquer suspeita clínica → escalar para médico imediatamente
+- Qualquer suspeita clínica → escalar para ${voc.professional} imediatamente
 
 REGRAS CRÍTICAS:
 - NUNCA diagnostica doenças ou prescreve medicamentos
 - Responde sempre em português brasileiro
 - Mensagens curtas e claras, tom acolhedor
-- NUNCA invente ou suponha consultas — sempre use a ferramenta consultar_agendamentos para verificar dados reais do banco antes de responder sobre agendamentos do paciente
+- NUNCA invente ou suponha ${voc.appointment}s — sempre use a ferramenta consultar_agendamentos para verificar dados reais do banco antes de responder sobre agendamentos do ${voc.client}
 
 FONTE OFICIAL DE DADOS (REGRA ABSOLUTA):
 - O BANCO DE DADOS é a única fonte oficial sobre consultas, datas e horários do paciente
@@ -759,7 +805,7 @@ export async function processMessage(params: {
   const todayStr = nowBrt.toISOString().split('T')[0]
   const weekdays = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado']
   const DATE_CONTEXT = `DATA E HORA ATUAL (Brasília, UTC-3): ${todayStr} (${weekdays[nowBrt.getUTCDay()]}). Use esta data como referência para calcular "hoje", "amanhã", "quarta-feira", etc. Ao agendar, converta o dia da semana mencionado pelo paciente para a data YYYY-MM-DD correta relativa a hoje.`
-  const SYSTEM_PROMPT = buildSystemPrompt(clinicCfg) + '\n\n' + DATE_CONTEXT + '\n\n' + buildCoordinatorPrompt(clinicCfg.clinicName)
+  const SYSTEM_PROMPT = buildSystemPrompt(clinicCfg) + '\n\n' + DATE_CONTEXT + '\n\n' + buildCoordinatorPrompt(clinicCfg.clinicName, clinicCfg.vocabulary)
 
   await db.from('audit_log').insert({
     actor_type: 'user', actor_id: sessionId ?? 'anonymous',

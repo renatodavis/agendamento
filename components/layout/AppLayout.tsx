@@ -8,6 +8,7 @@ import LogPanel, { type LogEntry } from '@/components/log/LogPanel'
 import AgendaBottomPanel from '@/components/agenda/AgendaBottomPanel'
 import { useApprovalCount } from '@/components/agenda/ApprovalPanel'
 import { useClinicName } from '@/lib/useClinicName'
+import ProfilesPanel from '@/components/profiles/ProfilesPanel'
 
 const EMPTY_PIPELINE: PipelineState = { active: [], done: [], workflow: null }
 
@@ -39,6 +40,7 @@ export default function AppLayout() {
   const router = useRouter()
 
   const [aiAlert, setAiAlert] = useState(false)
+  const [profilesOpen, setProfilesOpen] = useState(false)
 
   useEffect(() => {
     async function checkAi() {
@@ -169,6 +171,17 @@ export default function AppLayout() {
           <StatChip value={stats.tokens.toLocaleString('pt-BR')} label="tokens" />
           <StatChip value={`US$${stats.cost.toFixed(4)}`} label="custo" />
           <button
+            onClick={() => setProfilesOpen(true)}
+            style={{
+              padding: '4px 10px', borderRadius: 8, fontSize: 10, fontWeight: 600,
+              border: '1px solid var(--border)', background: 'var(--card)',
+              color: 'var(--muted)', cursor: 'pointer', letterSpacing: '.02em',
+              boxShadow: 'var(--shadow-sm)',
+            }}
+            title="Gerenciar perfis de negócio">
+            ⚙ Perfis
+          </button>
+          <button
             onClick={() => setLogOpen(v => !v)}
             style={{
               padding: '4px 10px', borderRadius: 8, fontSize: 10, fontWeight: 600,
@@ -206,6 +219,9 @@ export default function AppLayout() {
           </div>
         </div>
       </header>
+
+      {/* ── Perfis Modal ── */}
+      {profilesOpen && <ProfilesPanel onClose={() => setProfilesOpen(false)} />}
 
       {/* ── Body ── */}
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
