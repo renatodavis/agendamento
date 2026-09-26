@@ -22,9 +22,15 @@ ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 -- 3. Limpa dados de teste anteriores
 DELETE FROM appointment_history WHERE appointment_id IN (
-  SELECT id FROM appointments WHERE patient_id::text LIKE 'f000%'
+  SELECT id FROM appointments
+  WHERE patient_id::text LIKE 'f000%'
+     OR doctor_id::text  LIKE 'f000%'
+     OR doctor_id::text  LIKE '11111111%'
 );
-DELETE FROM appointments WHERE patient_id::text LIKE 'f000%';
+DELETE FROM appointments
+WHERE patient_id::text LIKE 'f000%'
+   OR doctor_id::text  LIKE 'f000%'
+   OR doctor_id::text  LIKE '11111111%';
 DELETE FROM wa_sessions  WHERE phone LIKE '+5511000%';
 DELETE FROM patients     WHERE id::text LIKE 'f000%';
 -- Remove todos os médicos (seed + outros perfis) e insere apenas dentistas

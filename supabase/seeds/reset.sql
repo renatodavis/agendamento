@@ -3,11 +3,17 @@
 --        Clínica Médica com dados iniciais
 -- ============================================================
 
--- Limpa agendamentos de teste
+-- Limpa agendamentos de teste (por paciente e por médico de outros perfis)
 DELETE FROM appointment_history WHERE appointment_id IN (
-  SELECT id FROM appointments WHERE patient_id::text LIKE 'f000%'
+  SELECT id FROM appointments
+  WHERE patient_id::text LIKE 'f000%'
+     OR doctor_id::text  LIKE 'f000%'
+     OR doctor_id::text  LIKE '11111111%'
 );
-DELETE FROM appointments WHERE patient_id::text LIKE 'f000%';
+DELETE FROM appointments
+WHERE patient_id::text LIKE 'f000%'
+   OR doctor_id::text  LIKE 'f000%'
+   OR doctor_id::text  LIKE '11111111%';
 
 -- Limpa pacientes/clientes de teste
 DELETE FROM wa_sessions WHERE phone LIKE '+5511000%';
