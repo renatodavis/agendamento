@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import { useVocabulary } from '@/lib/useActiveProfile'
 
 type Service = { name: string; description: string }
 
@@ -12,6 +13,7 @@ type ClinicConfig = {
 
 export default function ClinicConfigPanel() {
   const [cfg, setCfg]       = useState<ClinicConfig>({})
+  const voc = useVocabulary()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
@@ -72,11 +74,11 @@ export default function ClinicConfigPanel() {
       {/* Dados gerais */}
       <section className="flex flex-col gap-2">
         <div className="text-[10px] font-bold uppercase tracking-wide" style={{ color: 'var(--muted)' }}>
-          Dados da Clínica
+          Dados {voc.business ? `d${voc.business.endsWith('a') ? 'a' : 'o'} ${voc.business}` : 'do Negócio'}
         </div>
 
         <label className="flex flex-col gap-1">
-          <span className="text-[10px]" style={{ color: 'var(--muted)' }}>Nome da clínica</span>
+          <span className="text-[10px]" style={{ color: 'var(--muted)' }}>Nome {voc.business ? `d${voc.business.endsWith('a') ? 'a' : 'o'} ${voc.business}` : 'do negócio'}</span>
           <input
             className="text-[12px] px-2.5 py-1.5 rounded-md border outline-none"
             style={{ background: 'var(--panel)', borderColor: 'var(--border)', color: 'var(--text)' }}
@@ -106,7 +108,7 @@ export default function ClinicConfigPanel() {
           Especialidades / Serviços Atendidos
         </div>
         <p className="text-[9px] leading-relaxed" style={{ color: 'var(--muted)' }}>
-          O bot responderá APENAS solicitações relacionadas a estas especialidades. Pedidos fora da lista recebem uma mensagem educada informando o que a clínica atende.
+          O bot responderá APENAS solicitações relacionadas a estes serviços. Pedidos fora da lista recebem uma mensagem educada informando o que {voc.business ? `${voc.business.endsWith('a') ? 'a' : 'o'} ${voc.business}` : 'o negócio'} atende.
         </p>
 
         <div className="flex flex-col gap-1.5">
