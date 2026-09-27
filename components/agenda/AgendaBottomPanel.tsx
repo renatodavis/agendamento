@@ -391,13 +391,16 @@ export default function AgendaBottomPanel({ view: panelView }: { view: AgendaSec
 
           <div className="px-2 text-center leading-tight select-none" style={{ minWidth: 132 }}>
             <div className="font-display font-bold text-[14px]">
-              {Math.abs(dayOffset) <= 1 ? getDayLabel(dayOffset) : getDayFull(dayOffset).replace(/-feira/, '')}
+              {Math.abs(dayOffset) <= 1
+                ? getDayLabel(dayOffset)
+                : getDayFull(dayOffset).replace(/-feira/, '').split(',')[0]}
             </div>
-            {Math.abs(dayOffset) <= 1 && (
-              <div className="text-[11px] mt-px" style={{ color: 'var(--muted)' }}>
-                {getDayFull(dayOffset).replace(/-feira/, '')}
-              </div>
-            )}
+            <div className="text-[11px] mt-px" style={{ color: 'var(--muted)' }}>
+              {(() => {
+                const d = new Date(); d.setDate(d.getDate() + dayOffset)
+                return d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })
+              })()}
+            </div>
           </div>
 
           <button disabled={dayOffset >= 30} onClick={() => setDayOffset(d => d + 1)}

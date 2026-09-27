@@ -40,6 +40,7 @@ function AppointmentCard({ appt, isNext, showConvenio, onAttend, onSelect, selec
       onClick={() => onSelect(appt)}
       style={{
         width: 168,
+        height: 214,
         flexShrink: 0,
         borderRadius: 14,
         border: `2px solid ${selected ? sc.color : isNext ? sc.color : `${sc.color}55`}`,
@@ -99,17 +100,17 @@ function AppointmentCard({ appt, isNext, showConvenio, onAttend, onSelect, selec
             }}>
               {appt.patient?.name ?? '—'}
             </div>
-            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2 }}>
+            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {appt.doctor?.name}
             </div>
-            <div style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 600 }}>
+            <div style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {appt.doctor?.specialty}
             </div>
           </div>
         </div>
 
         {/* Tags: convenio + type */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+        <div style={{ display: 'flex', gap: 3, overflow: 'hidden' }}>
           {showConvenio && appt.patient?.convenio && (
             <span style={{
               fontSize: 8, fontWeight: 600, padding: '2px 6px',
