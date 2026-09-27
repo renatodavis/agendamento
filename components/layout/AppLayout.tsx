@@ -13,7 +13,7 @@ import { useActiveProfile, invalidateActiveProfileCache } from '@/lib/useActiveP
 
 const EMPTY_PIPELINE: PipelineState = { active: [], done: [], workflow: null }
 
-type MobileTab = 'wa' | 'agenda' | 'metrics'
+type MobileTab = 'wa' | 'agenda' | 'metrics' | 'config'
 
 function StatChip({ value, label, dim }: { value: string | number; label: string; dim?: boolean }) {
   return (
@@ -236,7 +236,8 @@ export default function AppLayout() {
 
         {/* Center: Agenda + Pipeline */}
         <div className={`center-col ${mobileTab === 'agenda' ? 'mobile-show' : 'mobile-hide'}`}
-          style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, borderRight: '1px solid var(--border)', overflow: 'hidden' }}>
+          style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, borderRight: '1px solid var(--border)', overflow: 'hidden' }}
+        >
           <AgendaBottomPanel approvalCount={approvalCount} />
           <PipelinePanel state={pipeline} />
         </div>
@@ -249,6 +250,99 @@ export default function AppLayout() {
         ].join(' ')}>
           <LogPanel entries={logEntries} stats={stats} />
         </div>
+
+        {/* Config panel — mobile only */}
+        {mobileTab === 'config' && (
+          <div className="mobile-config-panel" style={{
+            flex: 1, display: 'flex', flexDirection: 'column', padding: 20, gap: 12,
+            overflowY: 'auto', background: 'var(--background)',
+          }}>
+            {/* Profile info card */}
+            <div style={{
+              borderRadius: 14, padding: 16, border: '1px solid var(--border)',
+              background: 'var(--card)', boxShadow: 'var(--shadow-sm)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <div style={{
+                  width: 44, height: 44, borderRadius: 12, fontSize: 22,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'linear-gradient(135deg, var(--green) 0%, #0A7A5E 100%)',
+                }}>
+                  {activeProfile?.vocabulary?.emoji ?? '🏥'}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>{clinicName}</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                    {activeProfile?.name ?? 'Sistema de IA'}
+                    {' · '}
+                    <span style={{ color: 'var(--green)', fontWeight: 600 }}>● Online</span>
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11, color: 'var(--muted)' }}>
+                {activeProfile?.vocabulary?.client && <span>👤 {activeProfile.vocabulary.client}</span>}
+                {activeProfile?.vocabulary?.professional && <span>· 🎓 {activeProfile.vocabulary.professional}</span>}
+                {activeProfile?.vocabulary?.appointment && <span>· 📅 {activeProfile.vocabulary.appointment}</span>}
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)', paddingTop: 4 }}>
+              Configurações
+            </div>
+
+            {/* Perfis button */}
+            <button
+              onClick={() => setProfilesOpen(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 14,
+                padding: '14px 16px', borderRadius: 12,
+                border: '1px solid var(--border)', background: 'var(--card)',
+                cursor: 'pointer', textAlign: 'left', width: '100%',
+                boxShadow: 'var(--shadow-sm)',
+              }}>
+              <span style={{ fontSize: 24 }}>⚙️</span>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--foreground)' }}>Perfis de Negócio</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Trocar domínio, editar vocabulário, scripts de dados</div>
+              </div>
+              <span style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 16 }}>›</span>
+            </button>
+
+            {/* Stats */}
+            <div style={{
+              borderRadius: 12, padding: 16, border: '1px solid var(--border)',
+              background: 'var(--card)', display: 'grid', gridTemplateColumns: '1fr 1fr',
+              gap: 12, boxShadow: 'var(--shadow-sm)',
+            }}>
+              {[
+                { label: 'Consultas hoje', value: stats.total },
+                { label: 'Tokens usados',  value: stats.tokens.toLocaleString('pt-BR') },
+                { label: 'Custo USD',       value: `$${stats.cost.toFixed(4)}` },
+                { label: 'Latência',        value: stats.latency > 0 ? `${stats.latency}ms` : '—' },
+              ].map(({ label, value }) => (
+                <div key={label}>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 2 }}>{label}</div>
+                  <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--foreground)', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Sair */}
+            <button
+              onClick={handleLogout}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 14,
+                padding: '14px 16px', borderRadius: 12,
+                border: '1px solid #EF444440', background: '#EF444408',
+                cursor: 'pointer', textAlign: 'left', width: '100%',
+                marginTop: 'auto',
+              }}>
+              <span style={{ fontSize: 24 }}>🚪</span>
+              <div style={{ fontWeight: 600, fontSize: 13, color: '#EF4444' }}>Sair</div>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Mobile bottom nav ── */}
@@ -261,6 +355,7 @@ export default function AppLayout() {
           { id: 'wa',      icon: '💬', label: 'WhatsApp' },
           { id: 'agenda',  icon: '📅', label: 'Agenda' },
           { id: 'metrics', icon: '📊', label: 'Métricas' },
+          { id: 'config',  icon: '⚙️', label: 'Config' },
         ] as { id: MobileTab; icon: string; label: string }[]).map(tab => (
           <button key={tab.id}
             onClick={() => setMobileTab(tab.id)}
@@ -367,6 +462,11 @@ export default function AppLayout() {
           .mobile-nav  { display: flex !important; }
           .hidden-mobile { display: none !important; }
           .visible-mobile{ display: flex !important; }
+          .mobile-config-panel { display: flex !important; }
+        }
+        /* Hide config panel on desktop */
+        @media (min-width: 768px) {
+          .mobile-config-panel { display: none !important; }
         }
       `}</style>
     </div>
