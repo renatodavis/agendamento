@@ -16,6 +16,10 @@ const STATUS: Record<AppointmentStatus, { color: string; label: string; icon: st
   lista_espera:{ color: '#FB923C', label: 'Fila Espera', icon: '⏳', fill: false },
 }
 
+const DOMAIN_PATIENT_EMOJI: Record<string, string> = {
+  veterinaria: '🐾', personal: '🏃', barbearia: '✂️', salao: '💇', odontologia: '🦷',
+}
+
 const HISTORY_COLOR: Record<string, string> = {
   schedule:   '#A78BFA',
   confirm:    '#3B9EFF',
@@ -58,6 +62,8 @@ function nowT() {
 function ApptRow({ appt, selected, onSelect }: {
   appt: Appointment; selected: boolean; onSelect: () => void
 }) {
+  const profile = useActiveProfile()
+  const patientFallback = DOMAIN_PATIENT_EMOJI[profile?.domain_type ?? ''] ?? '👤'
   const sc = STATUS[appt.status]
   const name = appt.patient?.name ?? '—'
   const doctor = appt.doctor?.name ?? '—'
@@ -78,7 +84,7 @@ function ApptRow({ appt, selected, onSelect }: {
       </span>
       <span className="w-2 h-2 rounded-full shrink-0 border"
         style={{ background: sc.fill ? sc.color : 'transparent', borderColor: sc.color }} />
-      <span className="text-base shrink-0">{appt.patient?.photo_emoji ?? '👤'}</span>
+      <span className="text-base shrink-0">{appt.patient?.photo_emoji ?? patientFallback}</span>
       <div className="flex-1 min-w-0">
         <div className="text-xs font-semibold truncate" style={{ color: 'var(--foreground)' }}>{name}</div>
         <div className="text-[10px] truncate" style={{ color: 'var(--muted)' }}>{doctor} · {specialty}</div>
@@ -104,6 +110,8 @@ function ApptDetail({ appt, showConvenio, onAttend, onCancel, detailRef }: {
   const [showCancel, setShowCancel] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
   const [cancelledBy, setCancelledBy] = useState<'clinic' | 'patient'>('clinic')
+  const profile = useActiveProfile()
+  const patientFallback = DOMAIN_PATIENT_EMOJI[profile?.domain_type ?? ''] ?? '👤'
 
   useEffect(() => { setShowCancel(false); setCancelReason(''); setCancelledBy('clinic') }, [appt?.id])
 
@@ -129,7 +137,7 @@ function ApptDetail({ appt, showConvenio, onAttend, onCancel, detailRef }: {
     <div ref={detailRef} className="flex-1 overflow-y-auto flex flex-col">
       {/* Patient */}
       <div className="flex items-center gap-3 px-4 py-3 border-b" style={{ borderColor: 'var(--border)' }}>
-        <span className="text-3xl shrink-0">{appt.patient?.photo_emoji ?? '👤'}</span>
+        <span className="text-3xl shrink-0">{appt.patient?.photo_emoji ?? patientFallback}</span>
         <div className="min-w-0 flex-1">
           <div className="text-sm font-bold">{appt.patient?.name}</div>
           <div className="text-[10px] mt-0.5" style={{ color: 'var(--muted)' }}>

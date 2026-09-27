@@ -20,6 +20,10 @@ const STATUS: Record<AppointmentStatus, { color: string; label: string; icon: st
   lista_espera:{ color: '#FB923C', label: 'Fila Espera', icon: '⏳', fill: false },
 }
 
+const DOMAIN_PATIENT_EMOJI: Record<string, string> = {
+  veterinaria: '🐾', personal: '🏃', barbearia: '✂️', salao: '💇', odontologia: '🦷',
+}
+
 const CANCEL_REASONS = [
   'Paciente não compareceu',
   'Desistência do paciente',
@@ -50,6 +54,8 @@ function ApptRow({ appt, selected, compact, showConvenio, onSelect, onAttend }: 
   appt: Appointment; selected: boolean; compact?: boolean; showConvenio: boolean
   onSelect: () => void; onAttend: (id: string) => void
 }) {
+  const profile = useActiveProfile()
+  const patientFallback = DOMAIN_PATIENT_EMOJI[profile?.domain_type ?? ''] ?? '👤'
   const sc = STATUS[appt.status]
   const canAct = appt.status !== 'atendida' && appt.status !== 'cancelada'
   return (
@@ -75,13 +81,13 @@ function ApptRow({ appt, selected, compact, showConvenio, onSelect, onAttend }: 
       </div>
 
       {/* Emoji */}
-      {!compact && <span className="text-[22px] leading-none shrink-0">{appt.patient?.photo_emoji ?? '👤'}</span>}
+      {!compact && <span className="text-[22px] leading-none shrink-0">{appt.patient?.photo_emoji ?? patientFallback}</span>}
 
       {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="font-semibold leading-snug truncate"
           style={{ fontSize: compact ? 12 : 13, color: 'var(--foreground)' }}>
-          {compact && (appt.patient?.photo_emoji ?? '👤') + ' '}{appt.patient?.name}
+          {compact && (appt.patient?.photo_emoji ?? patientFallback) + ' '}{appt.patient?.name}
         </div>
         <div className="truncate mt-px" style={{ fontSize: 10, color: 'var(--muted)' }}>
           {compact ? appt.doctor?.name : `${appt.doctor?.name}${appt.doctor?.specialty ? ' · ' + appt.doctor.specialty : ''}`}
@@ -131,6 +137,8 @@ function ApptDetail({ appt, showConvenio, onAttend, onCancel, detailRef }: {
   const [showCancel, setShowCancel] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
   const [cancelledBy, setCancelledBy] = useState<'clinic' | 'patient'>('clinic')
+  const profile = useActiveProfile()
+  const patientFallback = DOMAIN_PATIENT_EMOJI[profile?.domain_type ?? ''] ?? '👤'
   useEffect(() => { setShowCancel(false); setCancelReason(''); setCancelledBy('clinic') }, [appt?.id])
 
   if (!appt) return (
@@ -147,7 +155,7 @@ function ApptDetail({ appt, showConvenio, onAttend, onCancel, detailRef }: {
   return (
     <div ref={detailRef} className="flex-1 overflow-y-auto flex flex-col">
       <div className="flex items-center gap-2.5 px-3 py-2 border-b shrink-0" style={{ borderColor: 'var(--border)' }}>
-        <span className="text-2xl">{appt.patient?.photo_emoji ?? '👤'}</span>
+        <span className="text-2xl">{appt.patient?.photo_emoji ?? patientFallback}</span>
         <div className="flex-1 min-w-0">
           <div className="text-sm font-bold truncate">{appt.patient?.name}</div>
           <div className="text-[10px]" style={{ color: 'var(--muted)' }}>{showConvenio && appt.patient?.convenio ? `${appt.patient.convenio} · ` : ''}{appt.type}</div>

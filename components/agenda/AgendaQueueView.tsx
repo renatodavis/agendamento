@@ -3,6 +3,10 @@ import { useMemo } from 'react'
 import type { Appointment, AppointmentStatus } from '@/types'
 import { useActiveProfile, profileHasConvenio } from '@/lib/useActiveProfile'
 
+const DOMAIN_PATIENT_EMOJI: Record<string, string> = {
+  veterinaria: '🐾', personal: '🏃', barbearia: '✂️', salao: '💇', odontologia: '🦷',
+}
+
 // ── Status config ─────────────────────────────────────────────────────────────
 const S: Record<AppointmentStatus, { color: string; bg: string; label: string; icon: string }> = {
   atendida:    { color: '#14C38E', bg: '#E6FBF4', label: 'ATENDIDA',    icon: '✓' },
@@ -28,6 +32,8 @@ type CardProps = {
 }
 
 function AppointmentCard({ appt, isNext, showConvenio, onAttend, onSelect, selected }: CardProps) {
+  const profile = useActiveProfile()
+  const patientFallback = DOMAIN_PATIENT_EMOJI[profile?.domain_type ?? ''] ?? '👤'
   const sc = S[appt.status]
   const canAttend = appt.status !== 'atendida' && appt.status !== 'cancelada'
   const isAttended = appt.status === 'atendida'
@@ -88,7 +94,7 @@ function AppointmentCard({ appt, isNext, showConvenio, onAttend, onSelect, selec
       {/* Patient */}
       <div style={{ padding: '10px 12px', flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
-          <span style={{ fontSize: 22, lineHeight: 1 }}>{appt.patient?.photo_emoji ?? '👤'}</span>
+          <span style={{ fontSize: 22, lineHeight: 1 }}>{appt.patient?.photo_emoji ?? patientFallback}</span>
           <div style={{ minWidth: 0 }}>
             <div style={{
               fontSize: 12, fontWeight: 700, lineHeight: 1.2,
