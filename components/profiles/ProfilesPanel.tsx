@@ -1,6 +1,113 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { invalidateActiveProfileCache } from '@/lib/useActiveProfile'
+import type { ScriptKey } from '@/app/api/scripts/route'
+
+type ScriptMeta = { key: ScriptKey; label: string; description: string; icon: string }
+
+function ScriptRunner({ domainType, onClose }: { domainType: string; onClose: () => void }) {
+  const [scripts, setScripts]   = useState<ScriptMeta[]>([])
+  const [running, setRunning]   = useState<ScriptKey | null>(null)
+  const [result, setResult]     = useState<{ key: ScriptKey; ok: boolean; steps: string[]; errors: string[] } | null>(null)
+
+  useEffect(() => {
+    fetch('/api/scripts').then(r => r.json()).then(setScripts).catch(() => {})
+  }, [])
+
+  async function run(key: ScriptKey) {
+    setRunning(key)
+    setResult(null)
+    try {
+      const res  = await fetch('/api/scripts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ script: key }),
+      })
+      const data = await res.json()
+      setResult({ key, ...data })
+      if (data.ok) invalidateActiveProfileCache()
+    } catch (e: unknown) {
+      setResult({ key, ok: false, steps: [], errors: [e instanceof Error ? e.message : String(e)] })
+    } finally {
+      setRunning(null)
+    }
+  }
+
+  return (
+    <Overlay onClose={onClose}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div>
+          <h2 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>🗃️ Scripts de Dados de Teste</h2>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+            Carrega dados fictícios para demonstração do sistema
+          </div>
+        </div>
+        <button style={btn()} onClick={onClose}>Fechar</button>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto', flex: 1 }}>
+        {scripts.map(s => {
+          const isActive  = s.key !== 'reset' && s.key === domainType
+          const isRunning = running === s.key
+          const isReset   = s.key === 'reset'
+          const done      = result?.key === s.key
+
+          return (
+            <div key={s.key} style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '10px 12px', borderRadius: 10,
+              border: `1px solid ${isActive ? 'var(--green)' : 'var(--border)'}`,
+              background: isActive ? 'color-mix(in srgb, var(--green) 8%, var(--card))' : 'var(--card)',
+            }}>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>{s.icon}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 12 }}>
+                  {s.label}
+                  {isActive && (
+                    <span style={{ marginLeft: 6, fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 10, background: 'var(--green)', color: '#fff' }}>
+                      ATIVO
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--muted)' }}>{s.description}</div>
+              </div>
+              <button
+                disabled={isRunning || running !== null}
+                onClick={() => run(s.key)}
+                style={btn({
+                  flexShrink: 0, padding: '5px 14px',
+                  background: isReset ? 'color-mix(in srgb, #F97316 15%, var(--card))' : done && result?.ok ? 'color-mix(in srgb, var(--green) 15%, var(--card))' : 'var(--card)',
+                  borderColor: isReset ? '#F97316' : done && result?.ok ? 'var(--green)' : 'var(--border)',
+                  color: isReset ? '#F97316' : done && result?.ok ? 'var(--green)' : 'var(--foreground)',
+                  opacity: running !== null && !isRunning ? 0.5 : 1,
+                })}>
+                {isRunning ? '⏳ Rodando…' : done && result?.ok ? '✓ Feito' : '▶ Rodar'}
+              </button>
+            </div>
+          )
+        })}
+      </div>
+
+      {result && (
+        <div style={{
+          marginTop: 12, padding: '10px 12px', borderRadius: 10, fontSize: 11,
+          border: `1px solid ${result.ok ? 'var(--green)' : '#EF4444'}`,
+          background: result.ok ? 'color-mix(in srgb, var(--green) 8%, var(--card))' : 'color-mix(in srgb, #EF4444 8%, var(--card))',
+        }}>
+          <div style={{ fontWeight: 700, marginBottom: 4, color: result.ok ? 'var(--green)' : '#EF4444' }}>
+            {result.ok ? '✓ Script executado com sucesso' : '✗ Script com erros'}
+          </div>
+          {result.steps.map((s, i) => (
+            <div key={i} style={{ color: 'var(--muted)' }}>· {s}</div>
+          ))}
+          {result.errors.map((e, i) => (
+            <div key={i} style={{ color: '#EF4444' }}>⚠ {e}</div>
+          ))}
+        </div>
+      )}
+    </Overlay>
+  )
+}
 
 export type Profile = {
   id: string
@@ -77,6 +184,7 @@ export default function ProfilesPanel({ onClose }: { onClose: () => void }) {
   const [saving, setSaving] = useState(false)
   const [activating, setActivating] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [scriptTarget, setScriptTarget] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -307,6 +415,10 @@ export default function ProfilesPanel({ onClose }: { onClose: () => void }) {
   // ── Profile List ───────────────────────────────────────────────────────
   const active = profiles.find(p => p.is_active)
 
+  if (scriptTarget !== null) {
+    return <ScriptRunner domainType={scriptTarget} onClose={() => setScriptTarget(null)} />
+  }
+
   return (
     <Overlay onClose={onClose}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -395,6 +507,7 @@ export default function ProfilesPanel({ onClose }: { onClose: () => void }) {
                     </button>
                   )}
                   <button style={btn({ flex: p.is_active ? 1 : 0 })} onClick={() => openEdit(p)}>✏️ Editar</button>
+                  <button style={btn()} title="Scripts de dados de teste" onClick={() => setScriptTarget(p.domain_type)}>🗃️</button>
                   {!p.is_active && (
                     <button style={btn({ color: 'var(--red, #e53)' })} onClick={() => handleDelete(p.id)}>✕</button>
                   )}
