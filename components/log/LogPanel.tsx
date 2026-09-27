@@ -31,7 +31,7 @@ export default function LogPanel({ entries, stats }: {
 }) {
   return (
     <div className="flex flex-col" style={{
-      width: '100%', height: '100%',
+      width: '100%', flex: 1, minHeight: 0,
       background: 'var(--panel)',
     }}>
       {/* Header */}

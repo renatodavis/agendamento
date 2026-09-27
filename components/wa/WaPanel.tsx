@@ -1,7 +1,6 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
-import type { PipelineState } from '@/components/pipeline/PipelinePanel'
 import type { LogEntry } from '@/components/log/LogPanel'
 import { MessageCircle } from 'lucide-react'
 
@@ -69,12 +68,11 @@ const COST_INPUT  = 3 / 1_000_000
 const COST_OUTPUT = 15 / 1_000_000
 
 type Props = {
-  onPipelineChange: (s: PipelineState) => void
   onLog: (e: LogEntry) => void
   onStats: (delta: { tokens?: number; latency?: number; cost?: number }) => void
 }
 
-export default function WaPanel({ onPipelineChange, onLog, onStats }: Props) {
+export default function WaPanel({ onLog, onStats }: Props) {
   const [sessions, setSessions]           = useState<Session[]>([])
   const [activeSession, setActiveSession] = useState<Session | null>(null)
   const [messages, setMessages]           = useState<WaMsg[]>([])
@@ -147,22 +145,14 @@ export default function WaPanel({ onPipelineChange, onLog, onStats }: Props) {
 
   function animatePipeline(workflow: string) {
     const seq = PIPELINE_SEQ[workflow] ?? PIPELINE_SEQ.agendamento
-    onPipelineChange({ active: [], done: [], workflow })
     let done: string[] = []
     seq.forEach((step, i) => {
       setTimeout(() => {
-        onPipelineChange({ active: step, done: [...done], workflow })
         onLog({ id: crypto.randomUUID(), agent: step[0], action: `Processando fluxo: ${workflow}`, status: 'processing', ts: new Date() })
       }, i * 600)
       setTimeout(() => {
         done = [...done, ...step]
         onLog({ id: crypto.randomUUID(), agent: step[0], action: 'Concluído', status: 'done', ts: new Date() })
-        if (i === seq.length - 1) {
-          onPipelineChange({ active: [], done, workflow })
-          setTimeout(() => onPipelineChange({ active: [], done: [], workflow: null }), 3000)
-        } else {
-          onPipelineChange({ active: seq[i + 1] ?? [], done, workflow })
-        }
       }, i * 600 + 500)
     })
   }

@@ -1,5 +1,7 @@
 'use client'
 import { useState } from 'react'
+import { Zap, MessageCircle, CalendarDays, User, ClipboardList, Smartphone, Banknote, ShieldCheck, Bot, Check, ChevronDown } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 
 export type PipelineState = {
   active: string[]
@@ -7,15 +9,15 @@ export type PipelineState = {
   workflow: string | null
 }
 
-const AGENT_META: Record<string, { short: string; icon: string; color: string }> = {
-  'coordenador-clinico':    { short: 'Coordenador',  icon: '⚡', color: '#F0A500' },
-  'triagem-whatsapp':       { short: 'Triagem',      icon: '💬', color: '#3B9EFF' },
-  'gerenciador-consultas':  { short: 'Consultas',    icon: '📅', color: '#14C38E' },
-  'cadastro-pacientes':     { short: 'Cadastro',     icon: '👤', color: '#22D3EE' },
-  'prontuario-clinico':     { short: 'Prontuário',   icon: '📋', color: '#A78BFA' },
-  'comunicacao-whatsapp':   { short: 'Comunicação',  icon: '📱', color: '#14C38E' },
-  'faturamento-cobranca':   { short: 'Faturamento',  icon: '💰', color: '#FB923C' },
-  'auditoria-conformidade': { short: 'Auditoria',    icon: '🔒', color: '#F472B6' },
+const AGENT_META: Record<string, { short: string; Icon: LucideIcon; color: string }> = {
+  'coordenador-clinico':    { short: 'Coordenador',  Icon: Zap,           color: '#F0A500' },
+  'triagem-whatsapp':       { short: 'Triagem',      Icon: MessageCircle, color: '#3B9EFF' },
+  'gerenciador-consultas':  { short: 'Consultas',    Icon: CalendarDays,  color: '#14C38E' },
+  'cadastro-pacientes':     { short: 'Cadastro',     Icon: User,          color: '#22D3EE' },
+  'prontuario-clinico':     { short: 'Prontuário',   Icon: ClipboardList, color: '#A78BFA' },
+  'comunicacao-whatsapp':   { short: 'Comunicação',  Icon: Smartphone,    color: '#14C38E' },
+  'faturamento-cobranca':   { short: 'Faturamento',  Icon: Banknote,      color: '#FB923C' },
+  'auditoria-conformidade': { short: 'Auditoria',    Icon: ShieldCheck,   color: '#F472B6' },
 }
 
 const WORKFLOW_STEPS: Record<string, string[]> = {
@@ -77,13 +79,11 @@ export default function PipelinePanel({ state }: { state: PipelineState }) {
           <span className="text-[9px] italic" style={{ color: 'var(--muted)' }}>
             {active.length > 0 ? 'processando…' : done.length > 0 ? 'concluído' : 'aguardando'}
           </span>
-          <span style={{
-            fontSize: 10, color: 'var(--muted)',
+          <ChevronDown size={14} style={{
+            color: 'var(--muted)',
             transform: collapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
             transition: 'transform .2s ease',
-            display: 'inline-block',
-            lineHeight: 1,
-          }}>▾</span>
+          }} />
         </div>
       </div>
 
@@ -92,17 +92,16 @@ export default function PipelinePanel({ state }: { state: PipelineState }) {
       <div className="flex items-center px-4 py-3 gap-0 overflow-x-auto"
         style={{ scrollbarWidth: 'none' }}>
         {steps.map((id, i) => {
-          const meta = AGENT_META[id] ?? { short: id, icon: '🤖', color: '#888' }
+          const meta = AGENT_META[id] ?? { short: id, Icon: Bot, color: '#888' }
           const isActive = active.includes(id)
           const isDone = done.includes(id)
-          const isNext = !isDone && !isActive && done.length > 0 && i === done.length
 
           return (
             <div key={id} className="flex items-center shrink-0">
               {/* Step node */}
               <div className="flex flex-col items-center gap-1" style={{ minWidth: 56 }}>
                 {/* Circle */}
-                <div className="relative flex items-center justify-center rounded-full text-base"
+                <div className="relative flex items-center justify-center rounded-full"
                   style={{
                     width: 36, height: 36,
                     background: isDone
@@ -114,14 +113,17 @@ export default function PipelinePanel({ state }: { state: PipelineState }) {
                     boxShadow: isActive ? `0 0 10px ${meta.color}55` : 'none',
                     transition: 'all 0.4s',
                     animation: isActive ? 'node-pulse 1.4s ease-in-out infinite' : 'none',
-                    fontSize: 16,
                   }}>
                   {isDone ? (
-                    <span style={{ fontSize: 14, color: '#fff' }}>✓</span>
+                    <Check size={15} style={{ color: '#fff' }} />
                   ) : (
-                    <span style={{ filter: isDone || isActive ? 'none' : 'grayscale(0.6) opacity(0.5)' }}>
-                      {meta.icon}
-                    </span>
+                    <meta.Icon
+                      size={16}
+                      style={{
+                        color: isActive ? meta.color : 'var(--muted)',
+                        opacity: isActive ? 1 : 0.45,
+                      }}
+                    />
                   )}
                 </div>
                 {/* Label */}

@@ -1,27 +1,24 @@
 'use client'
-import { useState, useCallback, useEffect } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import WaPanel from '@/components/wa/WaPanel'
-import PipelinePanel, { type PipelineState } from '@/components/pipeline/PipelinePanel'
 import LogPanel, { type LogEntry } from '@/components/log/LogPanel'
-import AgendaBottomPanel from '@/components/agenda/AgendaBottomPanel'
+import AgendaBottomPanel, { type AgendaSection } from '@/components/agenda/AgendaBottomPanel'
 import { useApprovalCount } from '@/components/agenda/ApprovalPanel'
 import { useClinicName } from '@/lib/useClinicName'
 import ProfilesPanel from '@/components/profiles/ProfilesPanel'
 import { useActiveProfile } from '@/lib/useActiveProfile'
-import { MessageCircle, CalendarDays, ChartColumn, Settings, SlidersHorizontal, PanelRight, LogOut, ChevronRight, Bot } from 'lucide-react'
-
-const EMPTY_PIPELINE: PipelineState = { active: [], done: [], workflow: null }
+import { MessageCircle, CalendarDays, ChartColumn, Settings, SlidersHorizontal, PanelRight, LogOut, ChevronRight, Bot, CircleCheck, CalendarClock, Users } from 'lucide-react'
 
 type MobileTab = 'wa' | 'agenda' | 'metrics' | 'config'
 
 export default function AppLayout() {
-  const [pipeline, setPipeline]   = useState<PipelineState>(EMPTY_PIPELINE)
   const [logEntries, setLogEntries] = useState<LogEntry[]>([])
   const [stats, setStats]         = useState({ total: 0, tokens: 0, latency: 0, cost: 0 })
   const [mobileTab, setMobileTab] = useState<MobileTab>('agenda')
   const [logOpen, setLogOpen]     = useState(true)
+  const [agendaSection, setAgendaSection] = useState<AgendaSection>('agenda')
   const approvalCount             = useApprovalCount()
   const clinicName                = useClinicName()
   const router = useRouter()
@@ -192,18 +189,53 @@ export default function AppLayout() {
         {/* WaPanel */}
         <div className={`wa-col ${mobileTab === 'wa' ? 'mobile-show' : 'mobile-hide'}`}
           style={{ borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <WaPanel onPipelineChange={setPipeline} onLog={handleLog} onStats={handleStats} />
+          <WaPanel onLog={handleLog} onStats={handleStats} />
         </div>
 
-        {/* Center: Agenda + Pipeline */}
+        {/* Center: sub-nav + AgendaBottomPanel + Pipeline */}
         <div className={`center-col ${mobileTab === 'agenda' ? 'mobile-show' : 'mobile-hide'}`}
           style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, borderRight: '1px solid var(--border)', overflow: 'hidden' }}
         >
-          <AgendaBottomPanel approvalCount={approvalCount} />
-          <PipelinePanel state={pipeline} />
+          {/* Sub-navigation */}
+          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--panel)', flexShrink: 0 }}>
+            {([
+              { id: 'agenda',    Icon: CalendarDays,  label: 'Agenda',    badge: 0 },
+              { id: 'approvals', Icon: CircleCheck,   label: 'Aprovações',badge: approvalCount },
+              { id: 'contacts',  Icon: Users,         label: 'Contatos',  badge: 0 },
+              { id: 'schedules', Icon: CalendarClock, label: 'Horários',  badge: 0 },
+              { id: 'config',    Icon: Settings,      label: 'Config',    badge: 0 },
+            ] as { id: AgendaSection; Icon: React.ElementType; label: string; badge: number }[]).map(tab => (
+              <button key={tab.id}
+                onClick={() => setAgendaSection(tab.id)}
+                style={{
+                  flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
+                  padding: '7px 4px 5px', border: 'none', background: 'none', cursor: 'pointer',
+                  borderBottom: agendaSection === tab.id ? '2px solid var(--green)' : '2px solid transparent',
+                  color: agendaSection === tab.id ? 'var(--green)' : 'var(--muted)',
+                  fontSize: 10, fontWeight: agendaSection === tab.id ? 700 : 500,
+                  transition: 'color .15s',
+                }}>
+                <span style={{ position: 'relative', display: 'inline-block', lineHeight: 0 }}>
+                  <tab.Icon size={16} strokeWidth={agendaSection === tab.id ? 2.25 : 1.75} />
+                  {tab.badge > 0 && (
+                    <span style={{
+                      position: 'absolute', top: -4, right: -6,
+                      minWidth: 14, height: 14, borderRadius: 7,
+                      background: '#F0A500', color: '#fff',
+                      fontSize: 8, fontWeight: 800,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      padding: '0 2px',
+                    }}>{tab.badge}</span>
+                  )}
+                </span>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <AgendaBottomPanel view={agendaSection} />
         </div>
 
-        {/* LogPanel — desktop only when logOpen, always on mobile metrics tab */}
+        {/* Right panel: Log — desktop only when logOpen, always on mobile metrics tab */}
         <div className={[
           'log-col-wrap',
           mobileTab === 'metrics' ? 'mobile-show' : 'mobile-hide',

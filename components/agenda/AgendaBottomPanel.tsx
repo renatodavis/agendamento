@@ -257,8 +257,9 @@ function ApptDetail({ appt, showConvenio, onAttend, onCancel, detailRef }: {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────
-export default function AgendaBottomPanel({ approvalCount = 0 }: { approvalCount?: number }) {
-  const [panelView, setPanelView]       = useState<'agenda' | 'approvals' | 'config' | 'schedules' | 'contacts'>('agenda')
+export type AgendaSection = 'agenda' | 'approvals' | 'config' | 'schedules' | 'contacts'
+
+export default function AgendaBottomPanel({ view: panelView }: { view: AgendaSection }) {
   const [agendaView, setAgendaView]     = useState<'list' | 'queue'>('list')
   const [dayOffset, setDayOffset]       = useState(0)
   const [selId, setSelId]               = useState<string | null>(null)
@@ -343,36 +344,6 @@ export default function AgendaBottomPanel({ approvalCount = 0 }: { approvalCount
     <div className="flex flex-col flex-1 min-h-0" style={{
       background: 'var(--panel)',
     }}>
-      {/* ── Tab switcher ── */}
-      <div className="flex border-b shrink-0" style={{ borderColor: 'var(--border)', overflowX: 'auto', scrollbarWidth: 'none' }}>
-        {([
-          { id: 'agenda',    label: 'Agenda',     Icon: CalendarDays },
-          { id: 'approvals', label: 'Aprovações', Icon: CircleCheck },
-          { id: 'contacts',  label: 'Contatos',   Icon: Users },
-          { id: 'schedules', label: 'Agendas',    Icon: CalendarClock },
-          { id: 'config',    label: 'Config',     Icon: Settings },
-        ] as const).map(({ id, label, Icon }) => {
-          const active = panelView === id
-          return (
-            <button key={id} onClick={() => setPanelView(id)}
-              className="flex-none inline-flex items-center gap-1.5 py-2 px-3 text-[12px] font-semibold border-b-2 transition-colors whitespace-nowrap"
-              style={{
-                borderColor: active ? 'var(--green)' : 'transparent',
-                color: active ? 'var(--foreground)' : 'var(--muted)',
-              }}>
-              <Icon size={15} strokeWidth={2} style={{ color: active ? 'var(--green)' : 'currentColor' }} />
-              {label}
-              {id === 'approvals' && approvalCount > 0 && (
-                <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold text-white leading-none"
-                  style={{ background: '#F0A500' }}>
-                  {approvalCount}
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
-
       {/* ── Approval panel ── */}
       {panelView === 'approvals' && (
         <div className="flex-1 min-h-0 flex flex-col">
