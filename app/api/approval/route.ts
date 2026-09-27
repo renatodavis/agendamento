@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
   if (auth instanceof NextResponse) return auth
 
   try {
-    const { id, action, rejectionReason } = await req.json()
+    const { id, action, rejectionReason, notify = true } = await req.json()
     if (!id || !action) return NextResponse.json({ error: 'id e action são obrigatórios' }, { status: 400 })
 
     const db = createServerClient()
@@ -83,7 +83,8 @@ export async function POST(req: NextRequest) {
 
     if (error || !approval) return NextResponse.json({ error: 'Aprovação não encontrada' }, { status: 404 })
 
-    const patientName = approval.patient_name ?? 'Paciente'
+    const clientLabel = voc.client.charAt(0).toUpperCase() + voc.client.slice(1)
+    const patientName = approval.patient_name ?? clientLabel
     const now = new Date().toISOString()
 
     // Helper: format appointment details from details jsonb or doctor join
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
       }).eq('id', id)
 
       if (approval.session_id && approval.message_to_patient) {
-        await notifyAndLog(db, approval.session_id, approval.message_to_patient)
+        if (notify) await notifyAndLog(db, approval.session_id, approval.message_to_patient)
       }
 
       await db.from('audit_log').insert({
@@ -136,7 +137,7 @@ export async function POST(req: NextRequest) {
         `Infelizmente o horário sugerido não está mais disponível. 😔\n\n` +
         `Nossa equipe está buscando outras opções e entrará em contato em breve.\n\n` +
         `Ou se preferir, pode nos dizer qual serviço e período prefere para agilizarmos! — ${clinicName} ${voc.emoji}`
-      await notifyAndLog(db, approval.session_id, msg)
+      if (notify) await notifyAndLog(db, approval.session_id, msg)
 
       return NextResponse.json({ ok: true, action: 'rejected' })
     }
@@ -185,7 +186,7 @@ export async function POST(req: NextRequest) {
         `${voc.appointment.charAt(0).toUpperCase() + voc.appointment.slice(1)} cancelad${voc.appointment.endsWith('a') ? 'a' : 'o'} conforme solicitado.\n\n` +
         apptLine +
         `Se precisar remarcar, é só nos chamar aqui no WhatsApp! — ${clinicName} ${voc.emoji}`
-      await notifyAndLog(db, approval.session_id, msg)
+      if (notify) await notifyAndLog(db, approval.session_id, msg)
 
       return NextResponse.json({ ok: true, action: 'confirm_cancel', cancelled_appointment_id: apptId })
     }
@@ -211,7 +212,7 @@ export async function POST(req: NextRequest) {
         : `Olá, *${patientName}*! 😊\n\n` +
           `Ótimo! ${apptCap} mantid${apptWord.endsWith('a') ? 'a' : 'o'}. Aguardamos sua presença!${apptInfo}\n` +
           `Se precisar de algo mais, estamos aqui. — ${clinicName} ${voc.emoji}`
-      await notifyAndLog(db, approval.session_id, msg)
+      if (notify) await notifyAndLog(db, approval.session_id, msg)
 
       return NextResponse.json({ ok: true, action: 'keep_appointment' })
     }
@@ -226,7 +227,7 @@ export async function POST(req: NextRequest) {
         `Olá, *${patientName}*! 📞\n\n` +
         `Nossa equipe já está ciente da sua solicitação e entrará em contato com você em breve.\n\n` +
         `${clinicName} ${voc.emoji}`
-      await notifyAndLog(db, approval.session_id, msg)
+      if (notify) await notifyAndLog(db, approval.session_id, msg)
       return NextResponse.json({ ok: true, action: 'resolve' })
     }
 
@@ -272,9 +273,9 @@ export async function POST(req: NextRequest) {
           `Por favor, entre em contato para reagendar em uma data de sua preferência. Pedimos desculpas pelo transtorno. — ${clinicName} ${voc.emoji}`
       }
       // Se não há session_id (paciente cadastrado pelo admin), busca telefone direto em patients
-      if (approval.session_id) {
+      if (notify && approval.session_id) {
         await notifyAndLog(db, approval.session_id, msg)
-      } else if (approval.patient_id) {
+      } else if (notify && approval.patient_id) {
         const { data: pat } = await db.from('patients').select('phone').eq('id', approval.patient_id).single()
         if (pat?.phone) {
           await sendWhatsApp(pat.phone, msg)
@@ -332,7 +333,7 @@ export async function POST(req: NextRequest) {
           `Sua solicitação de remarcação foi processada. Nossa equipe entrará em contato para confirmar o novo horário.${apptInfo}\n` +
           `${clinicName} 🏥`
       }
-      await notifyAndLog(db, approval.session_id, msg)
+      if (notify) await notifyAndLog(db, approval.session_id, msg)
       return NextResponse.json({ ok: true, action: 'resolve', rescheduled })
     }
 

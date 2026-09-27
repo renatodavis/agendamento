@@ -1,6 +1,8 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@supabase/supabase-js'
+import { useVocabulary } from '@/lib/useActiveProfile'
+import { Bell } from 'lucide-react'
 
 // Supabase client — usado APENAS para Realtime (dispara re-fetch via API).
 // A leitura de dados vai para /api/approval (service role, bypassa RLS).
@@ -88,9 +90,44 @@ function fmtSlot(iso: string) {
   }
 }
 
+type Toast = { id: number; name: string; label: string }
+
+function playAlert() {
+  try {
+    const ctx = new AudioContext()
+    const osc = ctx.createOscillator()
+    const gain = ctx.createGain()
+    osc.connect(gain); gain.connect(ctx.destination)
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(880, ctx.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.15)
+    gain.gain.setValueAtTime(0.18, ctx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4)
+    osc.start(); osc.stop(ctx.currentTime + 0.4)
+  } catch { /* sem suporte — silencioso */ }
+}
+
 export default function ApprovalPanel() {
   const [requests, setRequests] = useState<ApprovalRequest[]>([])
   const [busy, setBusy]         = useState<Record<string, boolean>>({})
+  const [noNotify, setNoNotify] = useState<Record<string, boolean>>({})
+  const [toasts, setToasts]     = useState<Toast[]>([])
+  const toastId = useRef(0)
+  const voc = useVocabulary()
+
+  function pushToast(name: string, label: string) {
+    const id = ++toastId.current
+    setToasts(prev => [...prev, { id, name, label }])
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 5000)
+  }
+
+  function notify(name: string, label: string) {
+    playAlert()
+    pushToast(name, label)
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      new Notification('Nova solicitação', { body: `${name} — ${label}`, icon: '/favicon.ico' })
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -110,13 +147,31 @@ export default function ApprovalPanel() {
   }, [])
 
   useEffect(() => {
+    // Pedir permissão para notificações do sistema
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+
     load()
-    // Realtime apenas para disparar re-fetch via API (não lê dados diretamente)
+
+    // Polling fallback: atualiza a cada 20s mesmo sem Realtime
+    const poll = setInterval(load, 20_000)
+
+    // Realtime: re-fetch em qualquer mudança; alerta apenas em INSERT
     const ch = supabase
       .channel('approval-panel')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_requests' }, () => load())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'approval_requests' },
+        (payload) => {
+          const r = payload.new as ApprovalRequest
+          const cfg = TYPE_CONFIG[(r.request_type ?? 'disponibilidade') as RequestType] ?? TYPE_CONFIG.disponibilidade
+          notify(r.patient_name ?? 'Cliente', cfg.label)
+          load()
+        })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'approval_requests' }, () => load())
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'approval_requests' }, () => load())
       .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    return () => { clearInterval(poll); supabase.removeChannel(ch) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load])
 
   async function act(id: string, action: string, body?: Record<string, unknown>) {
@@ -125,7 +180,7 @@ export default function ApprovalPanel() {
       await fetch('/api/approval', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, action, ...body }),
+        body: JSON.stringify({ id, action, notify: !noNotify[id], ...body }),
       })
       setRequests(prev => prev.filter(r => r.id !== id))
     } finally {
@@ -133,19 +188,48 @@ export default function ApprovalPanel() {
     }
   }
 
+  const toastStack = toasts.length > 0 && (
+    <div style={{
+      position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
+      display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end',
+      pointerEvents: 'none',
+    }}>
+      {toasts.map(t => (
+        <div key={t.id} style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          background: 'var(--card)', border: '1px solid #25D36660',
+          borderRadius: 12, padding: '10px 14px', boxShadow: 'var(--shadow-md)',
+          animation: 'toast-in .25s ease',
+          minWidth: 220, maxWidth: 300,
+        }}>
+          <Bell size={14} style={{ color: '#25D366', flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--foreground)' }}>{t.name}</div>
+            <div style={{ fontSize: 10, color: 'var(--muted)' }}>{t.label}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+
   if (requests.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-2 p-6 text-center">
-        <span className="text-3xl opacity-20">✅</span>
-        <p className="text-xs leading-relaxed" style={{ color: 'var(--muted)' }}>
-          Nenhuma aprovação pendente.<br />
-          Solicitações do bot aparecem aqui.
-        </p>
-      </div>
+      <>
+        {toastStack}
+        <div className="flex-1 flex flex-col items-center justify-center gap-2 p-6 text-center">
+          <span className="text-3xl opacity-20">✅</span>
+          <p className="text-xs leading-relaxed" style={{ color: 'var(--muted)' }}>
+            Nenhuma aprovação pendente.<br />
+            Solicitações do bot aparecem aqui.
+          </p>
+        </div>
+      </>
     )
   }
 
   return (
+    <>
+    {toastStack}
     <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-2"
       style={{ scrollbarWidth: 'thin', scrollbarColor: 'var(--border) transparent' }}>
       {requests.map(req => {
@@ -160,18 +244,21 @@ export default function ApprovalPanel() {
             <div className="px-3 pt-2.5 pb-0 flex items-center justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5">
-                  <div className="text-[12px] font-bold leading-tight truncate">{req.patient_name ?? 'Paciente'}</div>
-                  {req.patient_phone && (
+                  {req.patient_phone ? (
                     <a
                       href={`https://wa.me/${req.patient_phone.replace(/\D/g, '')}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      title={`Abrir conversa WhatsApp com ${req.patient_name ?? 'paciente'}`}
-                      className="shrink-0 text-[11px] px-1.5 py-0.5 rounded-full font-bold border transition-opacity hover:opacity-80"
-                      style={{ color: '#25D366', borderColor: '#25D36660', background: '#25D36612', textDecoration: 'none' }}
+                      title={`Abrir conversa WhatsApp com ${req.patient_name ?? voc.client}`}
+                      className="text-[12px] font-bold leading-tight truncate transition-opacity hover:opacity-75"
+                      style={{ color: '#25D366', textDecoration: 'none' }}
                     >
-                      💬
+                      {req.patient_name ?? voc.Client}
                     </a>
+                  ) : (
+                    <div className="text-[12px] font-bold leading-tight truncate">
+                      {req.patient_name ?? voc.Client}
+                    </div>
                   )}
                 </div>
                 {req.doctor && (
@@ -334,13 +421,31 @@ export default function ApprovalPanel() {
               )}
             </div>
 
-            <div className="px-3 pb-2 text-[8px]" style={{ color: 'var(--muted)' }}>
-              solicitado às {new Date(req.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+            <div className="px-3 pb-2 flex items-center justify-between gap-2">
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={!noNotify[req.id]}
+                  onChange={e => setNoNotify(p => ({ ...p, [req.id]: !e.target.checked }))}
+                  style={{ accentColor: '#25D366', width: 12, height: 12 }}
+                />
+                <span className="text-[9px]" style={{ color: 'var(--muted)' }}>Notificar cliente</span>
+              </label>
+              <span className="text-[8px]" style={{ color: 'var(--muted)' }}>
+                {new Date(req.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
             </div>
           </div>
         )
       })}
     </div>
+    <style>{`
+      @keyframes toast-in {
+        from { opacity: 0; transform: translateY(8px) scale(.97) }
+        to   { opacity: 1; transform: translateY(0) scale(1) }
+      }
+    `}</style>
+    </>
   )
 }
 
@@ -361,11 +466,12 @@ export function useApprovalCount() {
 
   useEffect(() => {
     load()
+    const poll = setInterval(load, 20_000)
     const ch = supabase
       .channel('approval-count')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_requests' }, () => load())
       .subscribe()
-    return () => { supabase.removeChannel(ch) }
+    return () => { clearInterval(poll); supabase.removeChannel(ch) }
   }, [load])
 
   return count
