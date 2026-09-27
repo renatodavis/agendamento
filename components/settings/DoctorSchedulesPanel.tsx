@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { useVocabulary } from '@/lib/useActiveProfile'
 
 const DAY_NAMES = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
 
@@ -54,8 +55,9 @@ function fmtDate(iso: string) {
   return new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })
 }
 
-// ── Novo Médico ────────────────────────────────────────────
+// ── Novo Profissional ──────────────────────────────────────
 function NewDoctorForm({ onCreated }: { onCreated: () => void }) {
+  const voc = useVocabulary()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [specialty, setSpecialty] = useState('')
@@ -79,11 +81,11 @@ function NewDoctorForm({ onCreated }: { onCreated: () => void }) {
     <div>
       {!open ? (
         <button onClick={() => setOpen(true)} style={{ ...btnStyle('#14C38E'), width: '100%' }}>
-          + Novo médico
+          + Novo {voc.professional}
         </button>
       ) : (
         <div style={{ padding: 12, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--panel)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--foreground)' }}>Novo médico</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--foreground)' }}>Novo {voc.professional}</div>
           <input placeholder="Nome (ex: Dr. Silva)" value={name} onChange={e => setName(e.target.value)}
             style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', padding: '6px 8px', fontSize: 12 }} />
           <input placeholder="Especialidade (ex: Cardiologia)" value={specialty} onChange={e => setSpecialty(e.target.value)}
@@ -235,8 +237,9 @@ function ScheduleRow({ s, onChange, onRemove }: { s: Schedule; onChange: (s: Sch
   )
 }
 
-// ── Card de médico ─────────────────────────────────────────
+// ── Card de profissional ───────────────────────────────────
 function DoctorCard({ doc, onSaved, onDeleted }: { doc: Doctor; onSaved: () => void; onDeleted: () => void }) {
+  const voc = useVocabulary()
   const [schedules, setSchedules]   = useState<Schedule[]>(doc.schedules)
   const [open, setOpen]             = useState(false)
   const [tab, setTab]               = useState<'agenda' | 'bloqueios'>('agenda')
@@ -312,7 +315,7 @@ function DoctorCard({ doc, onSaved, onDeleted }: { doc: Doctor; onSaved: () => v
                 <span style={{ fontSize: 9, padding: '2px 7px', borderRadius: 20, background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--muted)', fontWeight: 600 }}>{totalSlots} vagas/sem</span>
               </>
             )}
-            <button onClick={() => setEditing(true)} title="Editar médico"
+            <button onClick={() => setEditing(true)} title={`Editar ${voc.professional}`}
               style={{ width: 24, height: 24, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--card)', color: 'var(--muted)', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✎</button>
             <span onClick={() => setOpen(v => !v)} style={{ fontSize: 10, color: 'var(--muted)', cursor: 'pointer', transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform .2s', display: 'inline-block' }}>▾</span>
           </div>
@@ -377,6 +380,7 @@ function DoctorCard({ doc, onSaved, onDeleted }: { doc: Doctor; onSaved: () => v
 
 // ── Painel principal ───────────────────────────────────────
 export default function DoctorSchedulesPanel() {
+  const voc = useVocabulary()
   const [doctors, setDoctors] = useState<Doctor[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -402,7 +406,7 @@ export default function DoctorSchedulesPanel() {
           {doctors.length > 0 && (
             <div style={{ display: 'flex', gap: 8, padding: '4px 0', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-                {withSchedule}/{doctors.length} médicos com agenda configurada
+                {withSchedule}/{doctors.length} {voc.professional}s com agenda configurada
               </span>
               {withSchedule < doctors.length && (
                 <span style={{ fontSize: 11, color: '#F0A500', fontWeight: 600 }}>
@@ -416,7 +420,7 @@ export default function DoctorSchedulesPanel() {
           ))}
           {doctors.length === 0 && (
             <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)', fontSize: 12 }}>
-              Nenhum médico cadastrado. Clique em "+ Novo médico" para começar.
+              Nenhum {voc.professional} cadastrado. Clique em &quot;+ Novo {voc.professional}&quot; para começar.
             </div>
           )}
         </>

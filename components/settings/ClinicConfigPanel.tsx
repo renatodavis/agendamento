@@ -173,6 +173,17 @@ export default function ClinicConfigPanel() {
           value={cfg.out_of_scope_response ?? ''}
           onChange={e => setCfg(p => ({ ...p, out_of_scope_response: e.target.value }))}
         />
+        {cfg.out_of_scope_response && (
+          <div className="flex flex-col gap-1">
+            <div className="text-[9px] font-bold uppercase tracking-wide" style={{ color: 'var(--muted)' }}>Pré-visualização</div>
+            <div className="text-[11px] px-2.5 py-2 rounded-md border leading-relaxed whitespace-pre-wrap"
+              style={{ background: 'var(--card)', borderColor: 'var(--border)', color: 'var(--foreground)' }}>
+              {cfg.out_of_scope_response
+                .replace(/\{clinic_name\}/g, cfg.clinic_name ?? '[nome da clínica]')
+                .replace(/\{services_list\}/g, (cfg.services ?? []).map(s => `• ${s.name}`).join('\n') || '[lista de serviços]')}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Save button */}
