@@ -321,17 +321,35 @@ export async function POST(req: NextRequest) {
     await db.from('wa_sessions').delete().neq('id', '00000000-0000-0000-0000-000000000000')
     steps.push('Dados de WhatsApp e aprovações limpos')
 
-    // 4. Clear test appointments (delete history first, then appointments)
-    const { data: testAppts } = await db
-      .from('appointments').select('id')
-      .or('patient_id.like.f000%,doctor_id.like.f000%,doctor_id.like.11111111%')
-    if (testAppts?.length) {
-      const ids = testAppts.map((a: { id: string }) => a.id)
-      await db.from('appointment_history').delete().in('appointment_id', ids)
-      await db.from('appointments').delete().in('id', ids)
+    // 4. Clear test appointments — use range filters instead of .like() inside .or()
+    //    because % in PostgREST filter strings gets URL-encoded and breaks the match.
+    const [r1, r2, r3] = await Promise.all([
+      db.from('appointments').select('id').gte('patient_id', 'f000').lt('patient_id', 'f001'),
+      db.from('appointments').select('id').gte('doctor_id', 'f000').lt('doctor_id', 'f001'),
+      db.from('appointments').select('id').gte('doctor_id', '11111111').lt('doctor_id', '11111112'),
+    ])
+    const testApptIds = [
+      ...((r1.data ?? []).map((a: { id: string }) => a.id)),
+      ...((r2.data ?? []).map((a: { id: string }) => a.id)),
+      ...((r3.data ?? []).map((a: { id: string }) => a.id)),
+    ]
+    const uniqueIds = [...new Set(testApptIds)]
+    if (uniqueIds.length) {
+      await db.from('appointment_history').delete().in('appointment_id', uniqueIds)
+      await db.from('appointments').delete().in('id', uniqueIds)
     }
-    await db.from('patients').delete().like('id', 'f000%')
-    await db.from('doctors').delete().or('id.like.f000%,id.like.11111111%')
+    await db.from('patients').delete().gte('id', 'f000').lt('id', 'f001')
+    const [dr1, dr2] = await Promise.all([
+      db.from('doctors').select('id').gte('id', 'f000').lt('id', 'f001'),
+      db.from('doctors').select('id').gte('id', '11111111').lt('id', '11111112'),
+    ])
+    const testDoctorIds = [
+      ...((dr1.data ?? []).map((d: { id: string }) => d.id)),
+      ...((dr2.data ?? []).map((d: { id: string }) => d.id)),
+    ]
+    if (testDoctorIds.length) {
+      await db.from('doctors').delete().in('id', testDoctorIds)
+    }
     steps.push('Agendamentos e profissionais de teste removidos')
 
     // 5. Insert doctors
