@@ -165,10 +165,15 @@ export default function ContactsPanel() {
                     </span>
                   )}
                 </div>
-                <div style={{ display: 'flex', gap: 8, marginTop: 2, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 10, color: 'var(--muted)', fontFamily: 'monospace' }}>
-                    {fmtPhone(c.phone)}
-                  </span>
+                <div style={{ display: 'flex', gap: 8, marginTop: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <a
+                    href={`https://wa.me/${c.phone.replace(/\D/g, '')}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={`Abrir conversa WhatsApp com ${c.name}`}
+                    style={{ fontSize: 10, color: '#25D366', fontFamily: 'monospace', textDecoration: 'underline', textDecorationColor: '#25D36660' }}>
+                    💬 {fmtPhone(c.phone)}
+                  </a>
                   {c.appointment_count > 0 && (
                     <span style={{ fontSize: 10, color: '#14C38E', fontWeight: 600 }}>
                       📅 {c.appointment_count} consulta{c.appointment_count !== 1 ? 's' : ''}
