@@ -183,6 +183,8 @@ export default function ApprovalPanel() {
         body: JSON.stringify({ id, action, notify: !noNotify[id], ...body }),
       })
       setRequests(prev => prev.filter(r => r.id !== id))
+      // Notifica o badge imediatamente sem esperar Realtime/polling
+      window.dispatchEvent(new CustomEvent('approval-resolved'))
     } finally {
       setBusy(p => ({ ...p, [id]: false }))
     }
@@ -467,11 +469,16 @@ export function useApprovalCount() {
   useEffect(() => {
     load()
     const poll = setInterval(load, 20_000)
+    window.addEventListener('approval-resolved', load)
     const ch = supabase
       .channel('approval-count')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'approval_requests' }, () => load())
       .subscribe()
-    return () => { clearInterval(poll); supabase.removeChannel(ch) }
+    return () => {
+      clearInterval(poll)
+      window.removeEventListener('approval-resolved', load)
+      supabase.removeChannel(ch)
+    }
   }, [load])
 
   return count
