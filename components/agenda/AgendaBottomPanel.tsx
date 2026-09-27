@@ -7,7 +7,11 @@ import ClinicConfigPanel from '@/components/settings/ClinicConfigPanel'
 import DoctorSchedulesPanel from '@/components/settings/DoctorSchedulesPanel'
 import ContactsPanel from '@/components/contacts/ContactsPanel'
 import AgendaQueueView from './AgendaQueueView'
-import { useActiveProfile, profileHasConvenio } from '@/lib/useActiveProfile'
+import { useActiveProfile, profileHasConvenio, patientFallbackEmoji, vocabularyOf, type Vocabulary } from '@/lib/useActiveProfile'
+import {
+  CalendarDays, CircleCheck, Settings, CalendarClock, Users, ChevronLeft, ChevronRight,
+  ChevronsLeft, ChevronsRight, List, Ticket, ClipboardList, Check, X, Building2, User,
+} from 'lucide-react'
 
 const DOCTOR_COLORS = ['#3B9EFF', '#14C38E', '#F0A500', '#A78BFA', '#FB923C', '#F472B6', '#22D3EE', '#EF4444']
 
@@ -20,14 +24,10 @@ const STATUS: Record<AppointmentStatus, { color: string; label: string; icon: st
   lista_espera:{ color: '#FB923C', label: 'Fila Espera', icon: '⏳', fill: false },
 }
 
-const DOMAIN_PATIENT_EMOJI: Record<string, string> = {
-  veterinaria: '🐾', personal: '🏃', barbearia: '✂️', salao: '💇', odontologia: '🦷',
-}
-
-const CANCEL_REASONS = [
-  'Paciente não compareceu',
-  'Desistência do paciente',
-  'Médico indisponível',
+const cancelReasons = (v: Vocabulary) => [
+  `${v.client.charAt(0).toUpperCase() + v.client.slice(1)} não compareceu`,
+  `Desistência do ${v.client}`,
+  `${v.professional.charAt(0).toUpperCase() + v.professional.slice(1)} indisponível`,
   'Conflito de agenda',
 ]
 
@@ -54,8 +54,7 @@ function ApptRow({ appt, selected, compact, showConvenio, onSelect, onAttend }: 
   appt: Appointment; selected: boolean; compact?: boolean; showConvenio: boolean
   onSelect: () => void; onAttend: (id: string) => void
 }) {
-  const profile = useActiveProfile()
-  const patientFallback = DOMAIN_PATIENT_EMOJI[profile?.domain_type ?? ''] ?? '👤'
+  const patientFallback = patientFallbackEmoji(useActiveProfile())
   const sc = STATUS[appt.status]
   const canAct = appt.status !== 'atendida' && appt.status !== 'cancelada'
   return (
@@ -138,7 +137,8 @@ function ApptDetail({ appt, showConvenio, onAttend, onCancel, detailRef }: {
   const [cancelReason, setCancelReason] = useState('')
   const [cancelledBy, setCancelledBy] = useState<'clinic' | 'patient'>('clinic')
   const profile = useActiveProfile()
-  const patientFallback = DOMAIN_PATIENT_EMOJI[profile?.domain_type ?? ''] ?? '👤'
+  const patientFallback = patientFallbackEmoji(profile)
+  const voc = vocabularyOf(profile)
   useEffect(() => { setShowCancel(false); setCancelReason(''); setCancelledBy('clinic') }, [appt?.id])
 
   if (!appt) return (
@@ -198,19 +198,19 @@ function ApptDetail({ appt, showConvenio, onAttend, onCancel, detailRef }: {
               style={{ color: 'var(--green)', borderColor: 'var(--green)', background: '#14C38E12' }}
               onMouseEnter={e => (e.currentTarget.style.background = 'var(--green)')}
               onMouseLeave={e => (e.currentTarget.style.background = '#14C38E12')}>
-              ✓ Atendida
+              <span className="inline-flex items-center gap-1"><Check size={13} /> Atendido</span>
             </button>
             <button onClick={() => setShowCancel(v => !v)}
               className="flex-1 py-1.5 text-[11px] font-semibold rounded-md border transition-all"
               style={{ color: 'var(--red)', borderColor: 'var(--red)', background: '#EF444412' }}>
-              ✗ Cancelar
+              <span className="inline-flex items-center gap-1"><X size={13} /> Cancelar</span>
             </button>
           </>
         ) : (
           <div className="text-[11px] text-center w-full py-1" style={{ color: 'var(--muted)' }}>
-            {appt.status === 'atendida' ? '✓ Consulta já atendida'
-            : appt.status === 'cancelada' ? '✗ Consulta cancelada'
-            : '⏳ Paciente na fila de espera'}
+            {appt.status === 'atendida' ? 'Este horário já foi atendido'
+            : appt.status === 'cancelada' ? 'Este horário foi cancelado'
+            : `${voc.Client} na fila de espera`}
           </div>
         )}
       </div>
@@ -229,13 +229,15 @@ function ApptDetail({ appt, showConvenio, onAttend, onCancel, detailRef }: {
                 }}>
                 <input type="radio" name="cb" value={v} checked={cancelledBy === v}
                   onChange={() => setCancelledBy(v)} className="sr-only" />
-                {v === 'clinic' ? '🏥 Clínica' : '👤 Paciente'}
+                {v === 'clinic'
+                  ? <><Building2 size={12} /> {voc.business.charAt(0).toUpperCase() + voc.business.slice(1)}</>
+                  : <><User size={12} /> {voc.Client}</>}
               </label>
             ))}
           </div>
           {/* Reason */}
           <p className="text-[9px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--muted)' }}>Motivo</p>
-          {CANCEL_REASONS.map(r => (
+          {cancelReasons(voc).map(r => (
             <label key={r} className="flex items-center gap-2 py-1 text-xs cursor-pointer">
               <input type="radio" name="cr" value={r} checked={cancelReason === r}
                 onChange={() => setCancelReason(r)} style={{ accentColor: 'var(--red)' }} />
@@ -246,7 +248,7 @@ function ApptDetail({ appt, showConvenio, onAttend, onCancel, detailRef }: {
             onClick={() => { if (cancelReason) { onCancel(appt.id, cancelReason, cancelledBy); setShowCancel(false) } }}
             className="w-full mt-1.5 py-1 text-xs font-semibold text-white rounded-md disabled:opacity-40"
             style={{ background: 'var(--red)' }}>
-            ✗ Confirmar e Notificar Paciente
+            Cancelar e avisar {voc.client}
           </button>
         </div>
       )}
@@ -265,6 +267,7 @@ export default function AgendaBottomPanel({ approvalCount = 0 }: { approvalCount
   const detailRef                       = useRef<HTMLDivElement>(null)
   const activeProfile                   = useActiveProfile()
   const showConvenio                    = profileHasConvenio(activeProfile)
+  const voc                             = vocabularyOf(activeProfile)
 
   const { appointments, loading, error, updateStatus } = useAppointments(dayOffset)
   const selAppt = appointments.find(a => a.id === selId) ?? null
@@ -342,54 +345,32 @@ export default function AgendaBottomPanel({ approvalCount = 0 }: { approvalCount
     }}>
       {/* ── Tab switcher ── */}
       <div className="flex border-b shrink-0" style={{ borderColor: 'var(--border)', overflowX: 'auto', scrollbarWidth: 'none' }}>
-        <button onClick={() => setPanelView('agenda')}
-          className="flex-none py-1.5 px-3 text-[11px] font-semibold border-b-2 transition-colors whitespace-nowrap"
-          style={{
-            borderColor: panelView === 'agenda' ? 'var(--blue)' : 'transparent',
-            color: panelView === 'agenda' ? 'var(--blue)' : 'var(--muted)',
-          }}>
-          📅 Agenda
-        </button>
-        <button onClick={() => setPanelView('approvals')}
-          className="flex-none py-1.5 px-3 text-[11px] font-semibold border-b-2 transition-colors whitespace-nowrap"
-          style={{
-            borderColor: panelView === 'approvals' ? '#F0A500' : 'transparent',
-            color: panelView === 'approvals' ? '#F0A500' : 'var(--muted)',
-          }}>
-          <span className="inline-flex items-center justify-center gap-1">
-            ✅ Aprovações
-            {approvalCount > 0 && (
-              <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold text-white leading-none"
-                style={{ background: '#F0A500' }}>
-                {approvalCount}
-              </span>
-            )}
-          </span>
-        </button>
-        <button onClick={() => setPanelView('config')}
-          className="flex-none py-1.5 px-3 text-[11px] font-semibold border-b-2 transition-colors whitespace-nowrap"
-          style={{
-            borderColor: panelView === 'config' ? '#A78BFA' : 'transparent',
-            color: panelView === 'config' ? '#A78BFA' : 'var(--muted)',
-          }}>
-          ⚙️ Config
-        </button>
-        <button onClick={() => setPanelView('schedules')}
-          className="flex-none py-1.5 px-3 text-[11px] font-semibold border-b-2 transition-colors whitespace-nowrap"
-          style={{
-            borderColor: panelView === 'schedules' ? '#3B9EFF' : 'transparent',
-            color: panelView === 'schedules' ? '#3B9EFF' : 'var(--muted)',
-          }}>
-          🗓 Agendas
-        </button>
-        <button onClick={() => setPanelView('contacts')}
-          className="flex-none py-1.5 px-3 text-[11px] font-semibold border-b-2 transition-colors whitespace-nowrap"
-          style={{
-            borderColor: panelView === 'contacts' ? '#22D3EE' : 'transparent',
-            color: panelView === 'contacts' ? '#22D3EE' : 'var(--muted)',
-          }}>
-          👥 Contatos
-        </button>
+        {([
+          { id: 'agenda',    label: 'Agenda',     Icon: CalendarDays },
+          { id: 'approvals', label: 'Aprovações', Icon: CircleCheck },
+          { id: 'contacts',  label: 'Contatos',   Icon: Users },
+          { id: 'schedules', label: 'Agendas',    Icon: CalendarClock },
+          { id: 'config',    label: 'Config',     Icon: Settings },
+        ] as const).map(({ id, label, Icon }) => {
+          const active = panelView === id
+          return (
+            <button key={id} onClick={() => setPanelView(id)}
+              className="flex-none inline-flex items-center gap-1.5 py-2 px-3 text-[12px] font-semibold border-b-2 transition-colors whitespace-nowrap"
+              style={{
+                borderColor: active ? 'var(--green)' : 'transparent',
+                color: active ? 'var(--foreground)' : 'var(--muted)',
+              }}>
+              <Icon size={15} strokeWidth={2} style={{ color: active ? 'var(--green)' : 'currentColor' }} />
+              {label}
+              {id === 'approvals' && approvalCount > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold text-white leading-none"
+                  style={{ background: '#F0A500' }}>
+                  {approvalCount}
+                </span>
+              )}
+            </button>
+          )
+        })}
       </div>
 
       {/* ── Approval panel ── */}
@@ -424,44 +405,67 @@ export default function AgendaBottomPanel({ approvalCount = 0 }: { approvalCount
       {panelView === 'agenda' && <>
 
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 border-b shrink-0"
-        style={{ borderColor: 'var(--border)', minHeight: 52 }}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 sm:px-4 py-2 border-b shrink-0"
+        style={{ borderColor: 'var(--border)' }}>
         {/* Day nav */}
         <div className="flex items-center gap-1 shrink-0">
           <button disabled={dayOffset <= 0} onClick={() => setDayOffset(d => Math.max(0, d - 7))}
-            title="Semana anterior"
-            className="w-7 h-7 flex items-center justify-center rounded-lg border text-[11px] font-bold disabled:opacity-20 transition-colors"
-            style={{ background: 'var(--card)', borderColor: 'var(--border)', color: 'var(--muted)' }}>«</button>
+            title="Semana anterior" aria-label="Semana anterior"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-lg border disabled:opacity-20 transition-colors"
+            style={{ background: 'var(--card)', borderColor: 'var(--border)', color: 'var(--muted)' }}><ChevronsLeft size={15} /></button>
           <button disabled={dayOffset <= -1} onClick={() => setDayOffset(d => d - 1)}
-            className="w-6 h-7 flex items-center justify-center rounded-lg border text-sm disabled:opacity-30"
-            style={{ background: 'var(--card)', borderColor: 'var(--border)', color: 'var(--muted)' }}>‹</button>
+            title="Dia anterior" aria-label="Dia anterior"
+            className="w-7 h-7 flex items-center justify-center rounded-lg border disabled:opacity-30"
+            style={{ background: 'var(--card)', borderColor: 'var(--border)', color: 'var(--muted)' }}><ChevronLeft size={15} /></button>
 
-          <div className="font-display font-bold text-[15px] px-2 text-center leading-tight select-none" style={{ minWidth: 140 }}>
-            {getDayLabel(dayOffset)}
-            <div className="font-normal text-[11px] mt-px" style={{ color: 'var(--muted)' }}>
-              {dayOffset > 1
-                ? getDayFull(dayOffset)
-                : getDayFull(dayOffset).replace(/^\w+,\s/, '')}
+          <div className="px-2 text-center leading-tight select-none" style={{ minWidth: 132 }}>
+            <div className="font-display font-bold text-[14px]">
+              {Math.abs(dayOffset) <= 1 ? getDayLabel(dayOffset) : getDayFull(dayOffset).replace(/-feira/, '')}
             </div>
+            {Math.abs(dayOffset) <= 1 && (
+              <div className="text-[11px] mt-px" style={{ color: 'var(--muted)' }}>
+                {getDayFull(dayOffset).replace(/-feira/, '')}
+              </div>
+            )}
           </div>
 
           <button disabled={dayOffset >= 30} onClick={() => setDayOffset(d => d + 1)}
-            className="w-6 h-7 flex items-center justify-center rounded-lg border text-sm disabled:opacity-30"
-            style={{ background: 'var(--card)', borderColor: 'var(--border)', color: 'var(--muted)' }}>›</button>
+            title="Próximo dia" aria-label="Próximo dia"
+            className="w-7 h-7 flex items-center justify-center rounded-lg border disabled:opacity-30"
+            style={{ background: 'var(--card)', borderColor: 'var(--border)', color: 'var(--muted)' }}><ChevronRight size={15} /></button>
           <button disabled={dayOffset >= 30} onClick={() => setDayOffset(d => Math.min(30, d + 7))}
-            title="Próxima semana"
-            className="w-7 h-7 flex items-center justify-center rounded-lg border text-[11px] font-bold disabled:opacity-20 transition-colors"
-            style={{ background: 'var(--card)', borderColor: 'var(--border)', color: 'var(--muted)' }}>»</button>
+            title="Próxima semana" aria-label="Próxima semana"
+            className="hidden sm:flex w-7 h-7 items-center justify-center rounded-lg border disabled:opacity-20 transition-colors"
+            style={{ background: 'var(--card)', borderColor: 'var(--border)', color: 'var(--muted)' }}><ChevronsRight size={15} /></button>
         </div>
 
-        {/* Filters */}
-        <div className="flex items-center gap-1.5 overflow-x-auto flex-1" style={{ scrollbarWidth: 'none' }}>
+        {/* Stats + view toggle — pushed right; on mobile stays on the first line with the date */}
+        <div className="flex items-center gap-2 shrink-0 ml-auto sm:order-last">
+          <span className="text-[11px] font-medium tabular-nums" style={{ color: 'var(--muted)' }}
+            title={`${counts.atendida} de ${counts.todos} atendidos`}>
+            {counts.atendida}/{counts.todos}
+          </span>
+          <button
+            onClick={() => setAgendaView(v => v === 'list' ? 'queue' : 'list')}
+            title={agendaView === 'list' ? 'Ver fila de atendimento' : 'Ver lista'}
+            className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold border transition-all"
+            style={{
+              color: agendaView === 'queue' ? '#14C38E' : 'var(--muted)',
+              borderColor: agendaView === 'queue' ? '#14C38E' : 'var(--border)',
+              background: agendaView === 'queue' ? '#14C38E18' : 'var(--card)',
+            }}>
+            {agendaView === 'list' ? <><Ticket size={13} /> Fila</> : <><List size={13} /> Lista</>}
+          </button>
+        </div>
+
+        {/* Status filters — full-width second line on mobile */}
+        <div className="flex items-center gap-1.5 overflow-x-auto basis-full sm:basis-0 sm:flex-1 min-w-0" style={{ scrollbarWidth: 'none' }}>
           {([
             ['todos', 'Todos', counts.todos],
-            ['atendida', 'Atendida', counts.atendida],
-            ['confirmada', 'Confirmada', counts.confirmada],
-            ['pendente', 'Pendente', counts.pendente],
-            ['cancelada', 'Cancelada', counts.cancelada],
+            ['confirmada', 'Confirmados', counts.confirmada],
+            ['pendente', 'Pendentes', counts.pendente],
+            ['atendida', 'Atendidos', counts.atendida],
+            ['cancelada', 'Cancelados', counts.cancelada],
           ] as [string, string, number][]).map(([k, l, c]) => (
             <button key={k} onClick={() => setFilter(k)}
               className="px-3 py-1 rounded-full text-[11px] font-semibold border whitespace-nowrap transition-all"
@@ -470,27 +474,9 @@ export default function AgendaBottomPanel({ approvalCount = 0 }: { approvalCount
                 borderColor: filter === k ? 'var(--blue)' : 'var(--border)',
                 color: filter === k ? 'var(--blue)' : 'var(--muted)',
               }}>
-              {l}{k !== 'todos' && c > 0 ? ` · ${c}` : ''}
+              {l}{c > 0 ? ` · ${c}` : ''}
             </button>
           ))}
-        </div>
-
-        {/* Stats + view toggle */}
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[11px] font-medium" style={{ color: 'var(--muted)' }}>
-            {counts.atendida}/{counts.todos}
-          </span>
-          <button
-            onClick={() => setAgendaView(v => v === 'list' ? 'queue' : 'list')}
-            title={agendaView === 'list' ? 'Ver fila de atendimento' : 'Ver lista'}
-            className="px-3 py-1 rounded-full text-[11px] font-bold border transition-all"
-            style={{
-              color: agendaView === 'queue' ? '#14C38E' : 'var(--muted)',
-              borderColor: agendaView === 'queue' ? '#14C38E' : 'var(--border)',
-              background: agendaView === 'queue' ? '#14C38E18' : 'var(--card)',
-            }}>
-            {agendaView === 'list' ? '🎫 Fila' : '☰ Lista'}
-          </button>
         </div>
       </div>
 
@@ -499,7 +485,7 @@ export default function AgendaBottomPanel({ approvalCount = 0 }: { approvalCount
         <div className="flex items-center gap-2 px-4 py-2 border-b overflow-x-auto shrink-0"
           style={{ borderColor: 'var(--border)', scrollbarWidth: 'none' }}>
           <span className="text-[10px] font-bold uppercase tracking-[.07em] shrink-0"
-            style={{ color: 'var(--muted)' }}>Médico</span>
+            style={{ color: 'var(--muted)' }}>{voc.Professional}</span>
           <button
             onClick={() => setDoctorFilter(null)}
             className="px-3 py-1 rounded-full text-[11px] font-semibold border whitespace-nowrap shrink-0 transition-all"
@@ -532,10 +518,7 @@ export default function AgendaBottomPanel({ approvalCount = 0 }: { approvalCount
         <AgendaQueueView
           appointments={filtered}
           loading={loading}
-          dayOffset={dayOffset}
-          onDayChange={setDayOffset}
           onAttend={handleAttend}
-          onSwitchView={() => setAgendaView('list')}
           selectedId={selId}
           onSelect={a => setSelId(prev => prev === a.id ? null : a.id)}
         />
@@ -564,8 +547,8 @@ export default function AgendaBottomPanel({ approvalCount = 0 }: { approvalCount
           {error && <div className="p-4 text-sm text-center" style={{ color: 'var(--red)' }}>Erro: {error}</div>}
           {!loading && filtered.length === 0 && (
             <div className="flex flex-col items-center justify-center gap-2 py-12 text-sm" style={{ color: 'var(--muted)' }}>
-              <span style={{ fontSize: 28, opacity: .2 }}>📋</span>
-              Nenhuma consulta para {getDayLabel(dayOffset).toLowerCase()}.
+              <ClipboardList size={30} strokeWidth={1.5} style={{ opacity: .35 }} />
+              Nenhum horário marcado {Math.abs(dayOffset) <= 1 ? getDayLabel(dayOffset).toLowerCase() : `em ${getDayLabel(dayOffset)}`}.
             </div>
           )}
           {!loading && filtered.map(a => (

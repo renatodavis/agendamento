@@ -9,32 +9,18 @@ import AgendaBottomPanel from '@/components/agenda/AgendaBottomPanel'
 import { useApprovalCount } from '@/components/agenda/ApprovalPanel'
 import { useClinicName } from '@/lib/useClinicName'
 import ProfilesPanel from '@/components/profiles/ProfilesPanel'
-import { useActiveProfile, invalidateActiveProfileCache } from '@/lib/useActiveProfile'
+import { useActiveProfile } from '@/lib/useActiveProfile'
+import { MessageCircle, CalendarDays, ChartColumn, Settings, SlidersHorizontal, PanelRight, LogOut, ChevronRight, Bot } from 'lucide-react'
 
 const EMPTY_PIPELINE: PipelineState = { active: [], done: [], workflow: null }
 
 type MobileTab = 'wa' | 'agenda' | 'metrics' | 'config'
 
-function StatChip({ value, label, dim }: { value: string | number; label: string; dim?: boolean }) {
-  return (
-    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px]"
-      style={{
-        background: 'var(--card)',
-        borderColor: 'var(--border)',
-        color: dim ? 'var(--muted)' : 'var(--foreground)',
-        boxShadow: 'var(--shadow-sm)',
-      }}>
-      <span className="font-bold tabular-nums" style={{ color: 'var(--foreground)' }}>{value}</span>
-      <span style={{ color: 'var(--muted)' }}>{label}</span>
-    </div>
-  )
-}
-
 export default function AppLayout() {
   const [pipeline, setPipeline]   = useState<PipelineState>(EMPTY_PIPELINE)
   const [logEntries, setLogEntries] = useState<LogEntry[]>([])
   const [stats, setStats]         = useState({ total: 0, tokens: 0, latency: 0, cost: 0 })
-  const [mobileTab, setMobileTab] = useState<MobileTab>('wa')
+  const [mobileTab, setMobileTab] = useState<MobileTab>('agenda')
   const [logOpen, setLogOpen]     = useState(true)
   const approvalCount             = useApprovalCount()
   const clinicName                = useClinicName()
@@ -149,75 +135,50 @@ export default function AppLayout() {
         boxShadow: 'var(--shadow-sm)',
       }}>
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
           <div style={{
             width: 34, height: 34, borderRadius: 10,
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0,
             background: 'linear-gradient(135deg, var(--green) 0%, #0A7A5E 100%)',
             boxShadow: '0 2px 6px rgba(13,158,119,.35)',
           }}>{activeProfile?.vocabulary?.emoji ?? '🏥'}</div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1, letterSpacing: '-.01em', color: 'var(--foreground)' }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.1, letterSpacing: '-.01em', color: 'var(--foreground)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {clinicName}
             </div>
-            <div style={{ fontSize: 9, marginTop: 3, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.06em' }}>
-              {activeProfile ? activeProfile.name : 'Sistema de IA'} ·{' '}
-              <span style={{ color: 'var(--green)', fontWeight: 600 }}>● Online</span>
+            <div style={{ fontSize: 11, marginTop: 2, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {activeProfile ? activeProfile.name : 'Sistema de IA'}
             </div>
           </div>
         </div>
 
-        {/* Desktop stats */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} className="hidden-mobile">
-          <StatChip value={stats.total} label="consultas" />
-          <StatChip value={stats.tokens.toLocaleString('pt-BR')} label="tokens" />
-          <StatChip value={`US$${stats.cost.toFixed(4)}`} label="custo" />
-          <button
-            onClick={() => setProfilesOpen(true)}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          {/* AI status — single source of "online" state */}
+          <div title={aiAlert ? 'Sem crédito na Anthropic — respostas automáticas pausadas' : 'A IA está respondendo no WhatsApp'}
             style={{
-              padding: '4px 10px', borderRadius: 8, fontSize: 10, fontWeight: 600,
-              border: '1px solid var(--border)', background: 'var(--card)',
-              color: 'var(--muted)', cursor: 'pointer', letterSpacing: '.02em',
-              boxShadow: 'var(--shadow-sm)',
-            }}
-            title="Gerenciar perfis de negócio">
-            ⚙ Perfis
-          </button>
-          <button
-            onClick={() => setLogOpen(v => !v)}
-            style={{
-              padding: '4px 10px', borderRadius: 8, fontSize: 10, fontWeight: 600,
-              border: '1px solid var(--border)', background: 'var(--card)',
-              color: logOpen ? 'var(--blue)' : 'var(--muted)',
-              cursor: 'pointer', letterSpacing: '.02em',
-              boxShadow: 'var(--shadow-sm)',
-            }}
-            title={logOpen ? 'Recolher log' : 'Expandir log'}>
-            {logOpen ? '⊟ Log' : '⊞ Log'}
-          </button>
-          <button
-            onClick={handleLogout}
-            style={{
-              padding: '4px 10px', borderRadius: 8, fontSize: 10, fontWeight: 600,
-              border: '1px solid var(--border)', background: 'var(--card)',
-              color: 'var(--muted)', cursor: 'pointer', letterSpacing: '.02em',
-              boxShadow: 'var(--shadow-sm)',
-            }}
-            title="Sair">
-            Sair
-          </button>
-        </div>
+              display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
+              borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
+              border: `1px solid ${aiAlert ? '#F9731660' : '#14C38E40'}`,
+              background: aiAlert ? '#F9731612' : '#14C38E10',
+              color: aiAlert ? '#F97316' : 'var(--green)',
+            }}>
+            <Bot size={13} />
+            {aiAlert ? 'IA pausada' : 'IA ativa'}
+          </div>
 
-        {/* Mobile: minimal stats */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} className="visible-mobile">
-          {stats.total > 0 && <StatChip value={stats.total} label="consultas" />}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
-            borderRadius: 20, fontSize: 10, fontWeight: 600, border: '1px solid #14C38E40',
-            background: '#14C38E10', color: 'var(--green)',
-          }}>
-            <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--green)', animation: 'pulse 2s ease infinite' }} />
-            Online
+          {/* Desktop actions */}
+          <div className="hidden-mobile" style={{ alignItems: 'center', gap: 4 }}>
+            <button className="hdr-btn" onClick={() => setProfilesOpen(true)} title="Perfis de negócio">
+              <SlidersHorizontal size={14} /> Perfis
+            </button>
+            <button className="hdr-btn" onClick={() => setLogOpen(v => !v)}
+              title={logOpen ? 'Esconder monitor da IA' : 'Mostrar monitor da IA'}
+              style={{ color: logOpen ? 'var(--foreground)' : undefined }}>
+              <PanelRight size={14} /> Monitor
+            </button>
+            <button className="hdr-btn" onClick={handleLogout} title="Sair" aria-label="Sair">
+              <LogOut size={14} />
+            </button>
           </div>
         </div>
       </header>
@@ -274,15 +235,15 @@ export default function AppLayout() {
                   <div style={{ fontWeight: 700, fontSize: 15 }}>{clinicName}</div>
                   <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
                     {activeProfile?.name ?? 'Sistema de IA'}
-                    {' · '}
-                    <span style={{ color: 'var(--green)', fontWeight: 600 }}>● Online</span>
                   </div>
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11, color: 'var(--muted)' }}>
-                {activeProfile?.vocabulary?.client && <span>👤 {activeProfile.vocabulary.client}</span>}
-                {activeProfile?.vocabulary?.professional && <span>· 🎓 {activeProfile.vocabulary.professional}</span>}
-                {activeProfile?.vocabulary?.appointment && <span>· 📅 {activeProfile.vocabulary.appointment}</span>}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 11, color: 'var(--muted)' }}>
+                {[activeProfile?.vocabulary?.client, activeProfile?.vocabulary?.professional, activeProfile?.vocabulary?.appointment]
+                  .filter(Boolean)
+                  .map(w => (
+                    <span key={w} style={{ padding: '2px 8px', borderRadius: 20, border: '1px solid var(--border)' }}>{w}</span>
+                  ))}
               </div>
             </div>
 
@@ -301,12 +262,12 @@ export default function AppLayout() {
                 cursor: 'pointer', textAlign: 'left', width: '100%',
                 boxShadow: 'var(--shadow-sm)',
               }}>
-              <span style={{ fontSize: 24 }}>⚙️</span>
+              <SlidersHorizontal size={20} style={{ color: 'var(--green)', flexShrink: 0 }} />
               <div>
-                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--foreground)' }}>Perfis de Negócio</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Trocar domínio, editar vocabulário, scripts de dados</div>
+                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--foreground)' }}>Perfis de negócio</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Trocar ramo, editar vocabulário, dados de teste</div>
               </div>
-              <span style={{ marginLeft: 'auto', color: 'var(--muted)', fontSize: 16 }}>›</span>
+              <ChevronRight size={16} style={{ marginLeft: 'auto', color: 'var(--muted)', flexShrink: 0 }} />
             </button>
 
             {/* Stats */}
@@ -338,7 +299,7 @@ export default function AppLayout() {
                 cursor: 'pointer', textAlign: 'left', width: '100%',
                 marginTop: 'auto',
               }}>
-              <span style={{ fontSize: 24 }}>🚪</span>
+              <LogOut size={20} style={{ color: '#EF4444', flexShrink: 0 }} />
               <div style={{ fontWeight: 600, fontSize: 13, color: '#EF4444' }}>Sair</div>
             </button>
           </div>
@@ -352,22 +313,23 @@ export default function AppLayout() {
         boxShadow: '0 -2px 8px rgba(0,0,0,.06)',
       }}>
         {([
-          { id: 'wa',      icon: '💬', label: 'WhatsApp' },
-          { id: 'agenda',  icon: '📅', label: 'Agenda' },
-          { id: 'metrics', icon: '📊', label: 'Métricas' },
-          { id: 'config',  icon: '⚙️', label: 'Config' },
-        ] as { id: MobileTab; icon: string; label: string }[]).map(tab => (
+          { id: 'agenda',  Icon: CalendarDays,  label: 'Agenda' },
+          { id: 'wa',      Icon: MessageCircle, label: 'Conversas' },
+          { id: 'metrics', Icon: ChartColumn,   label: 'Monitor' },
+          { id: 'config',  Icon: Settings,      label: 'Ajustes' },
+        ] as const).map(tab => (
           <button key={tab.id}
             onClick={() => setMobileTab(tab.id)}
+            aria-current={mobileTab === tab.id ? 'page' : undefined}
             style={{
               flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative',
-              gap: 2, padding: '8px 0 6px', border: 'none', background: 'none', cursor: 'pointer',
+              gap: 3, padding: '8px 0 6px', border: 'none', background: 'none', cursor: 'pointer',
               color: mobileTab === tab.id ? 'var(--green)' : 'var(--muted)',
-              fontSize: 10, fontWeight: mobileTab === tab.id ? 700 : 400,
+              fontSize: 11, fontWeight: mobileTab === tab.id ? 700 : 500,
               transition: 'color .15s',
             }}>
-            <span style={{ fontSize: 20, lineHeight: 1, position: 'relative', display: 'inline-block' }}>
-              {tab.icon}
+            <span style={{ lineHeight: 0, position: 'relative', display: 'inline-block' }}>
+              <tab.Icon size={21} strokeWidth={mobileTab === tab.id ? 2.25 : 1.75} />
               {/* Approval badge on Agenda icon */}
               {tab.id === 'agenda' && approvalCount > 0 && (
                 <span style={{
@@ -391,47 +353,10 @@ export default function AppLayout() {
         ))}
       </nav>
 
-      {/* ── Floating WhatsApp button ── */}
-      <a
-        href="https://wa.me/554497734024"
-        target="_blank"
-        rel="noopener noreferrer"
-        title="Falar pelo WhatsApp"
-        className="wa-fab"
-        style={{
-          position: 'fixed',
-          bottom: 24,
-          right: 24,
-          width: 56,
-          height: 56,
-          borderRadius: '50%',
-          background: '#25D366',
-          boxShadow: '0 4px 16px rgba(37,211,102,.45)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999,
-          textDecoration: 'none',
-          transition: 'transform .15s, box-shadow .15s',
-        }}
-        onMouseEnter={e => {
-          e.currentTarget.style.transform = 'scale(1.1)'
-          e.currentTarget.style.boxShadow = '0 6px 24px rgba(37,211,102,.6)'
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.transform = 'scale(1)'
-          e.currentTarget.style.boxShadow = '0 4px 16px rgba(37,211,102,.45)'
-        }}>
-        {/* WhatsApp SVG */}
-        <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M16 2C8.268 2 2 8.268 2 16c0 2.47.668 4.784 1.832 6.77L2 30l7.438-1.795A13.935 13.935 0 0016 30c7.732 0 14-6.268 14-14S23.732 2 16 2z" fill="#fff"/>
-          <path d="M23.5 20.5c-.3.85-1.5 1.55-2.45 1.75-.65.13-1.5.24-4.35-1-3.65-1.57-6-5.3-6.18-5.55-.17-.25-1.42-1.9-1.42-3.62s.9-2.57 1.22-2.92c.3-.33.65-.42.87-.42.22 0 .43 0 .62.01.2.01.47-.08.73.55.27.65.9 2.22.98 2.38.08.17.13.37.03.6-.1.22-.15.36-.3.55-.15.2-.32.44-.45.58-.15.16-.3.34-.13.65.17.3.77 1.27 1.65 2.05 1.13 1 2.08 1.32 2.38 1.47.3.15.47.12.65-.07.17-.2.75-.87 1-.17.25.3.47.37.65.37s.37-.05.6-.15c.22-.1 1.42-.67 1.62-1.32.2-.65.2-1.2.14-1.32-.06-.1-.22-.15-.45-.27z" fill="#25D366"/>
-        </svg>
-      </a>
-
       <style>{`
         @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.85)} }
-        @media (max-width: 767px) { .wa-fab { bottom: 80px !important; } }
+        .hdr-btn { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12px; font-weight: 600; border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; transition: background .15s, color .15s; }
+        .hdr-btn:hover { background: var(--card); border-color: var(--border); color: var(--foreground); }
 
         /* Desktop (≥1024px): 3 cols */
         .wa-col       { width: 264px; flex-shrink: 0; display: flex; flex-direction: column; }

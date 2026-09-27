@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import type { PipelineState } from '@/components/pipeline/PipelinePanel'
 import type { LogEntry } from '@/components/log/LogPanel'
+import { MessageCircle } from 'lucide-react'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -276,9 +277,9 @@ export default function WaPanel({ onPipelineChange, onLog, onStats }: Props) {
           style={{ scrollbarWidth: 'thin', scrollbarColor: 'var(--border) transparent' }}>
           {sessions.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 px-4 py-10 text-center h-full">
-              <div className="text-3xl opacity-20">💬</div>
-              <p className="text-[11px] leading-relaxed" style={{ color: 'var(--muted)' }}>
-                Nenhuma conversa ainda.<br />Use o simulador para testar.
+              <MessageCircle size={30} strokeWidth={1.5} style={{ color: 'var(--muted)', opacity: .5 }} />
+              <p className="text-[12px] leading-relaxed" style={{ color: 'var(--muted)' }}>
+                Nenhuma conversa ainda.<br />As mensagens do WhatsApp aparecem aqui.
               </p>
             </div>
           ) : sessions.map(session => (

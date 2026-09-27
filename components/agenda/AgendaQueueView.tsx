@@ -1,11 +1,8 @@
 'use client'
 import { useMemo } from 'react'
 import type { Appointment, AppointmentStatus } from '@/types'
-import { useActiveProfile, profileHasConvenio } from '@/lib/useActiveProfile'
-
-const DOMAIN_PATIENT_EMOJI: Record<string, string> = {
-  veterinaria: '🐾', personal: '🏃', barbearia: '✂️', salao: '💇', odontologia: '🦷',
-}
+import { useActiveProfile, profileHasConvenio, patientFallbackEmoji } from '@/lib/useActiveProfile'
+import { ClipboardList, Check, X, Hourglass } from 'lucide-react'
 
 // ── Status config ─────────────────────────────────────────────────────────────
 const S: Record<AppointmentStatus, { color: string; bg: string; label: string; icon: string }> = {
@@ -32,8 +29,7 @@ type CardProps = {
 }
 
 function AppointmentCard({ appt, isNext, showConvenio, onAttend, onSelect, selected }: CardProps) {
-  const profile = useActiveProfile()
-  const patientFallback = DOMAIN_PATIENT_EMOJI[profile?.domain_type ?? ''] ?? '👤'
+  const patientFallback = patientFallbackEmoji(useActiveProfile())
   const sc = S[appt.status]
   const canAttend = appt.status !== 'atendida' && appt.status !== 'cancelada'
   const isAttended = appt.status === 'atendida'
@@ -143,17 +139,19 @@ function AppointmentCard({ appt, isNext, showConvenio, onAttend, onSelect, selec
           <div style={{
             width: '100%', padding: '7px 0', borderRadius: 8,
             background: `${sc.color}20`, border: `1px solid ${sc.color}50`,
-            fontSize: 10, fontWeight: 700, textAlign: 'center', color: sc.color,
+            fontSize: 11, fontWeight: 700, color: sc.color,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
           }}>
-            ✓ Atendida
+            <Check size={13} /> Atendido
           </div>
         ) : isCancelled ? (
           <div style={{
             width: '100%', padding: '7px 0', borderRadius: 8,
             background: '#EF444412', border: '1px solid #EF444440',
-            fontSize: 10, fontWeight: 700, textAlign: 'center', color: '#EF4444',
+            fontSize: 11, fontWeight: 700, color: '#EF4444',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
           }}>
-            ✗ Cancelada
+            <X size={13} /> Cancelado
           </div>
         ) : (
           <button
@@ -161,117 +159,17 @@ function AppointmentCard({ appt, isNext, showConvenio, onAttend, onSelect, selec
             style={{
               width: '100%', padding: '7px 0', borderRadius: 8,
               background: sc.color, border: 'none',
-              fontSize: 10, fontWeight: 700, color: '#fff',
+              fontSize: 11, fontWeight: 700, color: '#fff',
               cursor: 'pointer', transition: 'opacity .12s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
             }}
             onMouseEnter={e => (e.currentTarget.style.opacity = '.85')}
             onMouseLeave={e => (e.currentTarget.style.opacity = '1')}>
-            {canAttend && appt.status === 'lista_espera' ? '⏳ Promover' : '✓ Marcar Atendida'}
+            {canAttend && appt.status === 'lista_espera'
+              ? <><Hourglass size={13} /> Promover</>
+              : <><Check size={13} /> Marcar atendido</>}
           </button>
         )}
-      </div>
-    </div>
-  )
-}
-
-// ── Queue header ──────────────────────────────────────────────────────────────
-type QueueHeaderProps = {
-  dayOffset: number
-  appointments: Appointment[]
-  onDayChange: (n: number) => void
-  onSwitchView: () => void
-  selectedId: string | null
-}
-
-function QueueHeader({ dayOffset, appointments, onDayChange, onSwitchView, selectedId }: QueueHeaderProps) {
-  const attended = appointments.filter(a => a.status === 'atendida').length
-  const total    = appointments.filter(a => a.status !== 'cancelada').length
-
-  const dayLabel = () => {
-    if (dayOffset === -1) return 'Ontem'
-    if (dayOffset === 0)  return 'Agenda de Hoje'
-    if (dayOffset === 1)  return 'Amanhã'
-    const d = new Date(); d.setDate(d.getDate() + dayOffset)
-    return d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
-  }
-  const dateStr = () => {
-    const d = new Date(); d.setDate(d.getDate() + dayOffset)
-    return d.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })
-  }
-
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      padding: '10px 16px', borderBottom: '1px solid var(--border)',
-      background: 'var(--panel)', flexShrink: 0, gap: 12,
-    }}>
-      {/* Title + date + counter */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{
-            fontSize: 11, fontWeight: 800, letterSpacing: '.08em',
-            color: 'var(--foreground)', textTransform: 'uppercase',
-            whiteSpace: 'nowrap',
-          }}>
-            {dayLabel()}
-          </div>
-          {dayOffset === 0 && (
-            <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 1, whiteSpace: 'nowrap' }}>
-              {dateStr()}
-            </div>
-          )}
-        </div>
-        {total > 0 && (
-          <div style={{
-            flexShrink: 0, fontSize: 10, fontWeight: 600,
-            padding: '3px 10px', borderRadius: 20,
-            background: '#14C38E18', border: '1px solid #14C38E40',
-            color: '#14C38E', whiteSpace: 'nowrap',
-          }}>
-            {attended}/{total} atendidas
-          </div>
-        )}
-      </div>
-
-      {/* Controls */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-        {/* Day nav */}
-        <div style={{ display: 'flex', gap: 2 }}>
-          {[
-            { label: '«', step: -7, title: 'Semana anterior' },
-            { label: '‹', step: -1, title: 'Dia anterior' },
-            { label: '›', step: 1,  title: 'Próximo dia' },
-            { label: '»', step: 7,  title: 'Próxima semana' },
-          ].map(({ label, step, title }) => (
-            <button key={label}
-              disabled={(step < 0 && dayOffset <= (step === -7 ? 6 : 0)) || (step > 0 && dayOffset >= 30)}
-              onClick={() => onDayChange(dayOffset + step)}
-              title={title}
-              style={{
-                width: 24, height: 24, borderRadius: 6, border: '1px solid var(--border)',
-                background: 'var(--card)', color: 'var(--muted)',
-                fontSize: 11, fontWeight: 600, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                opacity: ((step < 0 && dayOffset <= 0) || (step > 0 && dayOffset >= 30)) ? .3 : 1,
-              }}>
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {/* View toggle */}
-        <button
-          onClick={onSwitchView}
-          title="Alternar para visualização em lista"
-          style={{
-            padding: '4px 10px', borderRadius: 7,
-            border: '1px solid var(--border)',
-            background: 'var(--card)', color: 'var(--muted)',
-            fontSize: 10, fontWeight: 600, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 4,
-          }}>
-          ☰ Lista
-        </button>
       </div>
     </div>
   )
@@ -281,18 +179,12 @@ function QueueHeader({ dayOffset, appointments, onDayChange, onSwitchView, selec
 type Props = {
   appointments: Appointment[]
   loading: boolean
-  dayOffset: number
-  onDayChange: (n: number) => void
   onAttend: (id: string) => void
-  onSwitchView: () => void
   selectedId: string | null
   onSelect: (appt: Appointment) => void
 }
 
-export default function AgendaQueueView({
-  appointments, loading, dayOffset, onDayChange,
-  onAttend, onSwitchView, selectedId, onSelect,
-}: Props) {
+export default function AgendaQueueView({ appointments, loading, onAttend, selectedId, onSelect }: Props) {
   const profile = useActiveProfile()
   const showConvenio = profileHasConvenio(profile)
 
@@ -306,14 +198,6 @@ export default function AgendaQueueView({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-      <QueueHeader
-        dayOffset={dayOffset}
-        appointments={appointments}
-        onDayChange={onDayChange}
-        onSwitchView={onSwitchView}
-        selectedId={selectedId}
-      />
-
       {/* Cards scroll area */}
       <div style={{
         flex: 1,
@@ -344,9 +228,9 @@ export default function AgendaQueueView({
             flex: 1, display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center', gap: 8,
           }}>
-            <span style={{ fontSize: 32, opacity: .2 }}>📋</span>
+            <ClipboardList size={32} strokeWidth={1.5} style={{ color: 'var(--muted)', opacity: .5 }} />
             <p style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
-              Nenhuma consulta para este dia.
+              Nenhum horário marcado neste dia.
             </p>
           </div>
         ) : (
