@@ -16,7 +16,7 @@ export type PendingBook = {
 
 export type PendingReminder = {
   kind: 'reminder'
-  appointment_id: string
+  appointment_ids: string[]
 }
 
 type PendingAction = (PendingBook | PendingReminder) & { created_at: string; expires_at: string }
@@ -129,38 +129,41 @@ async function confirmBooking(db: SupabaseClient, sessionId: string, pa: Pending
 
 async function confirmReminder(db: SupabaseClient, sessionId: string, pa: PendingReminder): Promise<string> {
   const { clinicName, vocabulary: voc } = await getClinicBasicConfig()
-  const { data: appt } = await db.from('appointments')
+  const { data: appts } = await db.from('appointments')
     .update({ status: 'confirmada' })
-    .eq('id', pa.appointment_id)
+    .in('id', pa.appointment_ids)
     .in('status', ['agendada', 'confirmada'])
-    .select('scheduled_at, doctor:doctors(name, specialty)')
-    .maybeSingle()
+    .select('id, scheduled_at, doctor:doctors(name, specialty)')
+    .order('scheduled_at')
 
-  if (!appt) return `Não encontrei esse agendamento ativo. Posso ajudar com algo mais?`
+  if (!appts?.length) return `Não encontrei esse agendamento ativo. Posso ajudar com algo mais?`
 
-  await db.from('audit_log').insert({
+  await db.from('audit_log').insert(appts.map(a => ({
     actor_type: 'user', actor_id: sessionId,
-    action: 'appointment_confirmed_by_patient', record_type: 'appointment', record_id: pa.appointment_id,
-  })
-  const doc = appt.doctor as unknown as { name: string; specialty: string } | null
-  const { date, time } = fmtSlot(appt.scheduled_at)
-  return `✅ *Presença confirmada!*\n\n📅 ${date} às *${time}*\n` +
-    (doc ? `👤 ${doc.name} — ${doc.specialty}\n\n` : '\n') +
-    `Te esperamos! — ${clinicName} ${voc.emoji}`
+    action: 'appointment_confirmed_by_patient', record_type: 'appointment', record_id: a.id,
+  })))
+  const lines = appts.map(a => {
+    const doc = a.doctor as unknown as { name: string; specialty: string } | null
+    const { date, time } = fmtSlot(a.scheduled_at)
+    return `📅 ${date} às *${time}*` + (doc ? `\n👤 ${doc.name} — ${doc.specialty}` : '')
+  }).join('\n\n')
+  return `✅ *Presença confirmada!*\n\n${lines}\n\nTe esperamos! — ${clinicName} ${voc.emoji}`
 }
 
 async function cancelFromReminder(db: SupabaseClient, sessionId: string, pa: PendingReminder): Promise<string> {
   const { clinicName, vocabulary: voc } = await getClinicBasicConfig()
-  const { data: appt } = await db.from('appointments')
+  const { data: appts } = await db.from('appointments')
     .select('id, scheduled_at, patient_id, doctor_id, patient:patients(name), doctor:doctors(name, specialty)')
-    .eq('id', pa.appointment_id)
-    .maybeSingle()
+    .in('id', pa.appointment_ids)
+    .in('status', ['agendada', 'confirmada'])
 
-  const { data: existing } = await db.from('approval_requests')
-    .select('id').eq('session_id', sessionId).eq('request_type', 'cancelamento').eq('status', 'pending')
-    .limit(1).maybeSingle()
+  for (const appt of appts ?? []) {
+    const { data: existing } = await db.from('approval_requests')
+      .select('id').eq('session_id', sessionId).eq('request_type', 'cancelamento').eq('status', 'pending')
+      .eq('details->>appointment_id', appt.id)
+      .limit(1).maybeSingle()
+    if (existing) continue
 
-  if (appt && !existing) {
     const doc = appt.doctor as unknown as { name: string; specialty: string } | null
     const patient = appt.patient as unknown as { name: string } | null
     const { date, time } = fmtSlot(appt.scheduled_at)
