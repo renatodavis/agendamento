@@ -1,24 +1,35 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { createServerClient } from '@/lib/supabase'
 import { processMessage } from '@/lib/chat'
-import { getClinicBasicConfig } from '@/lib/clinic-config-server'
+import { getClinicBasicConfig, isHealthBusiness } from '@/lib/clinic-config-server'
 import { maybeCreateApprovalIntercept } from '@/lib/approval-intercept'
+import { resolvePendingReply } from '@/lib/pending-action'
+import { sendWhatsAppText, sendAndLog } from '@/lib/whatsapp'
 
 // Meta WhatsApp Business Cloud API webhook
 // Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks
 
-const VERIFY_TOKEN  = process.env.WHATSAPP_VERIFY_TOKEN
-const APP_SECRET    = process.env.WHATSAPP_APP_SECRET
-const WA_TOKEN      = process.env.WHATSAPP_API_TOKEN
-const WA_PHONE_ID   = process.env.WHATSAPP_PHONE_NUMBER_ID
-const GROQ_API_KEY  = process.env.GROQ_API_KEY
+const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN
+const APP_SECRET   = process.env.WHATSAPP_APP_SECRET
+const WA_TOKEN     = process.env.WHATSAPP_API_TOKEN
+const GROQ_API_KEY = process.env.GROQ_API_KEY
+
+const RATE_LIMIT_MAX = 10
+const RATE_LIMIT_WINDOW_MS = 60_000
+
+type InboundMessage = {
+  from: string
+  id?: string
+  type?: string
+  text?: { body?: string }
+  audio?: { id?: string }
+}
 
 // ── Transcrição de áudio (mensagens de voz) via Groq Whisper ──────────
 async function transcribeAudio(mediaId: string): Promise<string | null> {
   if (!WA_TOKEN || !GROQ_API_KEY) return null
   try {
-    // 1. Resolve a URL temporária de download do media na Graph API
     const metaRes = await fetch(`https://graph.facebook.com/v19.0/${mediaId}`, {
       headers: { Authorization: `Bearer ${WA_TOKEN}` },
     })
@@ -29,7 +40,6 @@ async function transcribeAudio(mediaId: string): Promise<string | null> {
     const meta = await metaRes.json() as { url?: string; mime_type?: string }
     if (!meta.url) return null
 
-    // 2. Baixa o binário do áudio (mesma auth do WhatsApp)
     const audioRes = await fetch(meta.url, { headers: { Authorization: `Bearer ${WA_TOKEN}` } })
     if (!audioRes.ok) {
       console.error('[whatsapp] falha ao baixar áudio:', audioRes.status)
@@ -37,7 +47,6 @@ async function transcribeAudio(mediaId: string): Promise<string | null> {
     }
     const audioBuffer = await audioRes.arrayBuffer()
 
-    // 3. Transcreve via Groq (Whisper large-v3-turbo)
     const ext = meta.mime_type?.includes('ogg') ? 'ogg' : meta.mime_type?.includes('mp4') ? 'mp4' : 'mp3'
     const form = new FormData()
     form.append('file', new Blob([audioBuffer], { type: meta.mime_type ?? 'audio/ogg' }), `audio.${ext}`)
@@ -61,14 +70,16 @@ async function transcribeAudio(mediaId: string): Promise<string | null> {
   }
 }
 
-// O1: Rate limiting — max inbound messages per minute per session
-const RATE_LIMIT_MAX = 10
-const RATE_LIMIT_WINDOW_MS = 60_000
-
-// ── S6: Valida assinatura X-Hub-Signature-256 ────────────────────────
-// Se APP_SECRET não estiver configurado, a validação é ignorada (modo desenvolvimento).
+// ── Valida assinatura X-Hub-Signature-256 ─────────────────────────────
+// Sem APP_SECRET, só aceita fora de produção (desenvolvimento local).
 function verifySignature(rawBody: string, signature: string | null): boolean {
-  if (!APP_SECRET) return true
+  if (!APP_SECRET) {
+    if (process.env.NODE_ENV === 'production') {
+      console.error('[whatsapp] WHATSAPP_APP_SECRET não configurado — webhook recusado')
+      return false
+    }
+    return true
+  }
   if (!signature) return false
   const expected = 'sha256=' + createHmac('sha256', APP_SECRET).update(rawBody).digest('hex')
   try {
@@ -85,464 +96,151 @@ export async function GET(req: NextRequest) {
     return new Response('Forbidden', { status: 403 })
   }
   const { searchParams } = new URL(req.url)
-  const mode = searchParams.get('hub.mode')
-  const token = searchParams.get('hub.verify_token')
-  const challenge = searchParams.get('hub.challenge')
-
-  if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-    return new Response(challenge, { status: 200 })
+  if (searchParams.get('hub.mode') === 'subscribe' && searchParams.get('hub.verify_token') === VERIFY_TOKEN) {
+    return new Response(searchParams.get('hub.challenge'), { status: 200 })
   }
   return new Response('Forbidden', { status: 403 })
 }
 
-// ── POST: Receive inbound WhatsApp messages ──────────────────────────
+// ── POST: confirma recebimento à Meta na hora e processa em background ──
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text()
-
-    // S6: Valida assinatura quando WHATSAPP_APP_SECRET estiver configurado
-    const signature = req.headers.get('x-hub-signature-256')
-    if (!verifySignature(rawBody, signature)) {
+    if (!verifySignature(rawBody, req.headers.get('x-hub-signature-256'))) {
       console.warn('[whatsapp/POST] assinatura X-Hub-Signature-256 inválida')
       return new Response('Unauthorized', { status: 401 })
     }
 
     const body = JSON.parse(rawBody)
+    const value = body?.entry?.[0]?.changes?.[0]?.value
     const db = createServerClient()
-    const { clinicName } = await getClinicBasicConfig()
-
-    // Extract message from Meta webhook payload
-    const entry = body?.entry?.[0]
-    const changes = entry?.changes?.[0]
-    const value = changes?.value
 
     if (value?.statuses) {
-      // Delivery status update — update wa_messages status
       for (const status of value.statuses) {
-        await db
-          .from('wa_messages')
-          .update({ status: status.status })
-          .eq('id', status.id)
+        await db.from('wa_messages').update({ status: status.status }).eq('id', status.id)
       }
       return NextResponse.json({ ok: true })
     }
 
-    const message = value?.messages?.[0]
+    const message = value?.messages?.[0] as InboundMessage | undefined
     if (!message) return NextResponse.json({ ok: true })
 
-    const phone = message.from
-    let text    = message.text?.body ?? ''
-    const wamid = message.id as string | undefined
-    const contactName = value?.contacts?.[0]?.profile?.name ?? null
-
-    // S7: Deduplicação — Meta reenvia o mesmo wamid em retentativas (até 72h)
-    if (wamid) {
-      const { data: existing } = await createServerClient()
-        .from('wa_messages')
-        .select('id')
-        .eq('wamid', wamid)
-        .limit(1)
-        .single()
-      if (existing) {
-        console.log('[whatsapp/POST] wamid duplicado ignorado:', wamid)
-        return NextResponse.json({ ok: true })
-      }
+    // Meta reenvia o mesmo wamid em retentativas (até 72h)
+    if (message.id) {
+      const { data: existing } = await db.from('wa_messages').select('id').eq('wamid', message.id).limit(1).maybeSingle()
+      if (existing) return NextResponse.json({ ok: true })
     }
 
-    // Mensagem de voz — transcreve via Groq Whisper antes de seguir o fluxo normal
-    if (message.type === 'audio' && message.audio?.id) {
-      const transcript = await transcribeAudio(message.audio.id)
-      if (transcript) {
-        text = transcript
-      } else {
-        if (WA_TOKEN && WA_PHONE_ID) {
-          await fetch(`https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messaging_product: 'whatsapp', to: phone, type: 'text',
-              text: { body: 'Desculpe, não consegui entender o áudio. Pode escrever sua mensagem, por favor? 🙏' },
-            }),
-          })
-        }
-        return NextResponse.json({ ok: true, action: 'audio_transcription_failed' })
-      }
-    }
-
-    // Upsert WhatsApp session
-    const { data: session } = await db
-      .from('wa_sessions')
-      .upsert({ phone, last_inbound_at: new Date().toISOString() }, { onConflict: 'phone' })
-      .select()
-      .single()
-
-    // Update contact name from WhatsApp profile
-    if (session?.id && contactName) {
-      await db.from('wa_sessions').update({ name: contactName }).eq('id', session.id)
-    }
-
-    // Check opt-out
-    if (session?.opt_out_at) {
-      return NextResponse.json({ ok: true })
-    }
-
-    // S12: LGPD consent — obrigatório no primeiro contato (Art. 11 Lei 13.709/2018)
-    if (session?.id && !session?.lgpd_consent_at) {
-      const isConsent = /^(sim|s|yes|1|aceito|aceitar|concordo|autorizo|ok)$/i.test(text.trim())
-
-      if (isConsent) {
-        await db.from('wa_sessions').update({ lgpd_consent_at: new Date().toISOString() }).eq('id', session.id)
-        // Armazena mensagem de aceite e deixa o fluxo continuar normalmente
-        // (a próxima mensagem do paciente já será processada pela IA)
-      } else {
-        // Primeiro contato — solicita consentimento antes de processar
-        const consentMsg =
-          `🏥 *${clinicName} — Privacidade de Dados*\n\n` +
-          `Olá! Para iniciar seu atendimento, precisamos do seu consentimento conforme a *Lei Geral de Proteção de Dados (LGPD — Lei 13.709/2018)*.\n\n` +
-          `📋 *Seus dados serão utilizados para:*\n` +
-          `• Agendamento e controle de consultas\n` +
-          `• Comunicação sobre seus atendimentos\n` +
-          `• Prontuário médico (dados sensíveis de saúde, Art. 11 LGPD)\n\n` +
-          `🔒 Seus dados são protegidos e *não serão compartilhados* com terceiros sem sua autorização.\n\n` +
-          `Responda *SIM* para aceitar e iniciar o atendimento.`
-
-        // Salva mensagem inbound e resposta de consentimento
-        await db.from('wa_messages').insert({
-          session_id: session.id, direction: 'inbound', body: text, status: 'delivered',
-          ...(wamid ? { wamid } : {}),
-        })
-        if (WA_TOKEN && WA_PHONE_ID) {
-          const waRes = await fetch(`https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ messaging_product: 'whatsapp', to: phone, type: 'text', text: { body: consentMsg } }),
-          })
-          if (!waRes.ok) {
-            const errBody = await waRes.text().catch(() => '')
-            console.error('[whatsapp/POST] falha ao enviar mensagem LGPD:', waRes.status, errBody)
-          }
-        }
-        await db.from('wa_messages').insert({
-          session_id: session.id, direction: 'outbound', body: consentMsg, status: 'sent',
-        })
-        return NextResponse.json({ ok: true, action: 'lgpd_consent_requested' })
-      }
-    }
-
-    // O1: Rate limiting — max RATE_LIMIT_MAX inbound messages per RATE_LIMIT_WINDOW_MS
-    if (session?.id) {
-      const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString()
-      const { count } = await db
-        .from('wa_messages')
-        .select('id', { count: 'exact', head: true })
-        .eq('session_id', session.id)
-        .eq('direction', 'inbound')
-        .gte('sent_at', windowStart)
-      if ((count ?? 0) >= RATE_LIMIT_MAX) {
-        console.warn('[whatsapp/POST] rate limit excedido para sessão:', session.id)
-        return NextResponse.json({ ok: true })
-      }
-    }
-
-    // ── Intercept: resposta ao lembrete de 24h (SIM confirma / NÃO escala cancelamento) ──
-    if (session?.id && text) {
-      const isYes = /^(sim|s|yes|1|confirmo|vou|estarei|ok|comparecer)$/i.test(text.trim())
-      const isNo  = /^(n[aã]o|n|no|2|cancelar|nao|desmarcar)$/i.test(text.trim())
-
-      if (isYes || isNo) {
-        const windowStart = new Date(Date.now() + 20 * 60 * 60 * 1000).toISOString()
-        const windowEnd   = new Date(Date.now() + 28 * 60 * 60 * 1000).toISOString()
-
-        // Busca consulta com lembrete enviado dentro da janela de 24h
-        const { data: remindedAppt } = await db
-          .from('appointments')
-          .select('id, scheduled_at, patient_id, doctor:doctors(name, specialty)')
-          .eq('session_id', session.id)
-          .not('reminder_sent_at', 'is', null)
-          .in('status', ['agendada', 'confirmada'])
-          .gte('scheduled_at', windowStart)
-          .lte('scheduled_at', windowEnd)
-          .order('scheduled_at', { ascending: true })
-          .limit(1)
-          .single()
-
-        // Fallback: busca por patient_id se session_id não vinculado
-        let appt = remindedAppt
-        if (!appt && session.patient_id) {
-          const { data: byPatient } = await db
-            .from('appointments')
-            .select('id, scheduled_at, patient_id, doctor:doctors(name, specialty)')
-            .eq('patient_id', session.patient_id)
-            .not('reminder_sent_at', 'is', null)
-            .in('status', ['agendada', 'confirmada'])
-            .gte('scheduled_at', windowStart)
-            .lte('scheduled_at', windowEnd)
-            .order('scheduled_at', { ascending: true })
-            .limit(1)
-            .single()
-          appt = byPatient
-        }
-
-        if (appt) {
-          const doctor = appt.doctor as unknown as { name: string; specialty: string } | null
-          const d = new Date(appt.scheduled_at)
-          const dateStr = d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'UTC' })
-          const timeStr = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
-
-          if (isYes) {
-            await db.from('appointments').update({ status: 'confirmada' }).eq('id', appt.id)
-            await db.from('audit_log').insert({
-              actor_type: 'user', actor_id: session.id,
-              action: 'appointment_confirmed_by_patient',
-              record_type: 'appointment', record_id: appt.id,
-            })
-
-            const confirmMsg =
-              `✅ *Presença confirmada!*\n\n` +
-              `📅 ${dateStr} às *${timeStr}*\n` +
-              `👨‍⚕️ ${doctor?.name ?? ''} — ${doctor?.specialty ?? ''}\n\n` +
-              `Te esperamos amanhã! — ${clinicName} 🏥`
-
-            await db.from('wa_messages').insert({
-              session_id: session.id, direction: 'inbound', body: text, status: 'delivered',
-              ...(wamid ? { wamid } : {}),
-            })
-            if (WA_TOKEN && WA_PHONE_ID) {
-              await fetch(`https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ messaging_product: 'whatsapp', to: phone, type: 'text', text: { body: confirmMsg } }),
-              })
-            }
-            await db.from('wa_messages').insert({
-              session_id: session.id, direction: 'outbound', body: confirmMsg, status: 'sent',
-            })
-            return NextResponse.json({ ok: true, action: 'reminder_confirmed' })
-          }
-
-          if (isNo) {
-            // Escala cancelamento para recepção
-            await db.from('approval_requests').insert({
-              session_id: session.id,
-              patient_id: appt.patient_id,
-              patient_name: contactName ?? phone,
-              doctor_id: null,
-              request_type: 'cancelamento',
-              status: 'pending',
-              message_to_receptionist: `Paciente respondeu NÃO ao lembrete de 24h. Consulta: ${dateStr} às ${timeStr} — ${doctor?.specialty ?? ''}`,
-              details: { appointment_id: appt.id, scheduled_at: appt.scheduled_at, doctor_name: doctor?.name, doctor_specialty: doctor?.specialty },
-            })
-
-            const cancelMsg =
-              `Entendido! Sua solicitação de cancelamento foi registrada. 📋\n\n` +
-              `Nossa equipe entrará em contato para confirmar. — ${clinicName} 🏥`
-
-            await db.from('wa_messages').insert({
-              session_id: session.id, direction: 'inbound', body: text, status: 'delivered',
-              ...(wamid ? { wamid } : {}),
-            })
-            if (WA_TOKEN && WA_PHONE_ID) {
-              await fetch(`https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ messaging_product: 'whatsapp', to: phone, type: 'text', text: { body: cancelMsg } }),
-              })
-            }
-            await db.from('wa_messages').insert({
-              session_id: session.id, direction: 'outbound', body: cancelMsg, status: 'sent',
-            })
-            return NextResponse.json({ ok: true, action: 'reminder_cancelled' })
-          }
-        }
-      }
-    }
-    // ── end reminder intercept ──
-
-    // ── HITL intercept: approved approval waiting for patient confirmation ──
-    if (session?.id && text) {
-      const { data: pending } = await db
-        .from('approval_requests')
-        .select('*, doctor:doctors(name, specialty)')
-        .eq('session_id', session.id)
-        .eq('status', 'approved')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
-
-      if (pending) {
-        const isYes = /^(sim|s|yes|1|confirmo|ok)$/i.test(text.trim())
-        const isNo  = /^(n[aã]o|n|no|2|outro|cancelar)$/i.test(text.trim())
-
-        if (isYes) {
-          const { data: appt } = await db
-            .from('appointments')
-            .insert({
-              patient_id:   pending.patient_id,
-              doctor_id:    pending.doctor_id,
-              scheduled_at: pending.suggested_at,
-              status: 'agendada',
-              type: 'Consulta',
-            })
-            .select('id')
-            .single()
-
-          await db.from('approval_requests').update({ status: 'confirmed' }).eq('id', pending.id)
-
-          const doctor = pending.doctor as unknown as { name: string; specialty: string } | null
-          const dateStr = new Date(pending.suggested_at).toLocaleDateString('pt-BR', {
-            weekday: 'long', day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC',
-          })
-          const timeStr = new Date(pending.suggested_at).toLocaleTimeString('pt-BR', {
-            hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
-          })
-
-          const confirmMsg =
-            `✅ *Consulta confirmada!*\n\n` +
-            `📅 ${dateStr} às ${timeStr}\n` +
-            `👨‍⚕️ ${doctor?.name ?? ''} — ${doctor?.specialty ?? ''}\n\n` +
-            `${clinicName} 🏥\nQualquer dúvida, estamos à disposição!`
-
-          if (WA_TOKEN && WA_PHONE_ID) {
-            const waRes = await fetch(`https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`, {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ messaging_product: 'whatsapp', to: phone, type: 'text', text: { body: confirmMsg } }),
-            })
-            if (!waRes.ok) {
-              const errBody = await waRes.text().catch(() => '')
-              console.error('[whatsapp/POST] falha ao enviar confirmação HITL:', waRes.status, errBody)
-            }
-          }
-          await db.from('wa_messages').insert({
-            session_id: session.id, direction: 'outbound', body: confirmMsg, status: 'sent',
-          })
-          await db.from('audit_log').insert({
-            actor_type: 'agent', actor_id: 'sistema-agendamento',
-            action: 'appointment_confirmed_by_patient',
-            record_type: 'appointment', record_id: appt?.id ?? 'unknown',
-          })
-          return NextResponse.json({ ok: true, action: 'confirmed', appointmentId: appt?.id })
-        }
-
-        if (isNo) {
-          await db.from('approval_requests').update({
-            status: 'rejected',
-            rejection_reason: 'Paciente recusou o horário sugerido',
-          }).eq('id', pending.id)
-        }
-      }
-    }
-    // ── end HITL intercept ──
-
-    // ── Auto-resolve alteracao_horario ao receber SIM/NÃO do paciente ───────────
-    // Quando o paciente confirma ou recusa um reagendamento proposto pelo bot,
-    // o card some de Aprovações — a recepção não precisa agir manualmente.
-    if (session?.id && text) {
-      const isConfirmation = /^(sim|s|yes|1|confirmo|ok|n[aã]o|n|no|2|cancelar)$/i.test(text.trim())
-      if (isConfirmation) {
-        const now = new Date().toISOString()
-        await db.from('approval_requests')
-          .update({ status: 'resolved', reviewed_at: now, reviewed_by: 'patient' })
-          .eq('session_id', session.id)
-          .eq('request_type', 'alteracao_horario')
-          .eq('status', 'pending')
-      }
-    }
-    // ── end auto-resolve ──
-
-    // Carrega histórico ANTES de inserir a mensagem atual (evita duplicata no contexto)
-    const { data: historyMsgs } = await db
-      .from('wa_messages')
-      .select('direction, body')
-      .eq('session_id', session?.id)
-      .order('sent_at', { ascending: false })
-      .limit(20)
-
-    // Filtra mensagens com body vazio/null (Anthropic rejeita content vazio)
-    // e colapsa mensagens consecutivas do mesmo role (Anthropic exige alternância)
-    const rawHistory = (historyMsgs ?? []).reverse()
-      .filter(m => m.body && (m.body as string).trim().length > 0)
-      .map(m => ({ role: m.direction === 'inbound' ? 'user' : 'assistant', content: m.body as string }))
-    const history: { role: string; content: string }[] = []
-    for (const msg of rawHistory) {
-      if (history.length > 0 && history[history.length - 1].role === msg.role) {
-        // Mescla mensagens consecutivas do mesmo role
-        history[history.length - 1].content += '\n' + msg.content
-      } else {
-        history.push(msg)
-      }
-    }
-
-    // Store inbound message (wamid gravado para deduplicação de retentativas)
-    await db.from('wa_messages').insert({
-      session_id: session?.id,
-      direction: 'inbound',
-      body: text,
-      status: 'delivered',
-      ...(wamid ? { wamid } : {}),
-    })
-
-    // ── Pre-AI keyword intercept (shared with /api/chat) ────────────────────────
-    await maybeCreateApprovalIntercept({ text, sessionId: session?.id, contactName, phone })
-    // ── end keyword intercept ──
-
-    // R2: Chama a lógica de chat diretamente (sem HTTP interno)
-    const { response, workflow } = await processMessage({
-      message: text,
-      sessionId: session?.id,
-      history,
-    })
-
-    // Send reply via WhatsApp Cloud API
-    if (response && WA_TOKEN && WA_PHONE_ID) {
-      const waRes = await fetch(
-        `https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${WA_TOKEN}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            messaging_product: 'whatsapp',
-            to: phone,
-            type: 'text',
-            text: { body: response },
-          }),
-        }
-      )
-
-      // R3: Detecta e loga falhas no envio WhatsApp
-      if (!waRes.ok) {
-        const errBody = await waRes.text().catch(() => '')
-        console.error('[whatsapp/POST] falha ao enviar mensagem:', waRes.status, errBody)
-        await db.from('wa_messages').insert({
-          session_id: session?.id, direction: 'outbound', body: response, status: 'failed',
-        })
-        return NextResponse.json({ ok: true, error: 'whatsapp_send_failed' })
-      }
-
-      const waData = await waRes.json()
-
-      await db.from('wa_messages').insert({
-        session_id: session?.id,
-        direction: 'outbound',
-        body: response,
-        status: 'sent',
-      })
-
-      await db.from('audit_log').insert({
-        actor_type: 'agent',
-        actor_id: 'comunicacao-whatsapp',
-        action: 'whatsapp_send',
-        record_type: 'wa_message',
-        record_id: waData?.messages?.[0]?.id ?? 'unknown',
-      })
-    }
-
-    return NextResponse.json({ ok: true, response, workflow })
+    const contactName = (value?.contacts?.[0]?.profile?.name as string | undefined) ?? null
+    after(() => handleInbound(message, contactName).catch(err => console.error('[whatsapp] handleInbound error:', err)))
+    return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[whatsapp/route] error:', err)
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })
+  }
+}
+
+async function handleInbound(message: InboundMessage, contactName: string | null) {
+  const db = createServerClient()
+  const { clinicName, vocabulary: voc } = await getClinicBasicConfig()
+  const isHealth = isHealthBusiness(voc.business_noun)
+  const phone = message.from
+  const wamid = message.id
+  let text = message.text?.body ?? ''
+
+  if (message.type === 'audio' && message.audio?.id) {
+    const transcript = await transcribeAudio(message.audio.id)
+    if (!transcript) {
+      await sendWhatsAppText(phone, 'Desculpe, não consegui entender o áudio. Pode escrever sua mensagem, por favor? 🙏')
+      return
+    }
+    text = transcript
+  }
+  if (!text.trim()) return
+
+  const { data: session } = await db
+    .from('wa_sessions')
+    .upsert({ phone, last_inbound_at: new Date().toISOString(), ...(contactName ? { name: contactName } : {}) }, { onConflict: 'phone' })
+    .select()
+    .single()
+  if (!session) return
+  if (session.opt_out_at) return
+
+  const waSession = { id: session.id as string, phone }
+  const storeInbound = () => db.from('wa_messages').insert({
+    session_id: session.id, direction: 'inbound', body: text, status: 'delivered', ...(wamid ? { wamid } : {}),
+  })
+
+  // Consentimento LGPD obrigatório no primeiro contato (Art. 11 Lei 13.709/2018)
+  if (!session.lgpd_consent_at) {
+    const isConsent = /^(sim|s|yes|1|aceito|aceitar|concordo|autorizo|ok)[\s.!]*$/i.test(text.trim())
+    if (!isConsent) {
+      await storeInbound()
+      const consentMsg =
+        `🔒 *${clinicName} — Privacidade de Dados*\n\n` +
+        `Olá! Para iniciar seu atendimento, precisamos do seu consentimento conforme a *Lei Geral de Proteção de Dados (LGPD — Lei 13.709/2018)*.\n\n` +
+        `📋 *Seus dados serão utilizados para:*\n` +
+        `• Agendamento e controle de atendimentos\n` +
+        `• Comunicação sobre seus agendamentos\n` +
+        (isHealth ? `• Prontuário (dados sensíveis de saúde, Art. 11 LGPD)\n` : '') + `\n` +
+        `Seus dados são protegidos e *não serão compartilhados* com terceiros sem sua autorização.\n\n` +
+        `Responda *SIM* para aceitar e iniciar o atendimento.`
+      await sendAndLog(db, waSession, consentMsg)
+      return
+    }
+    await db.from('wa_sessions').update({ lgpd_consent_at: new Date().toISOString() }).eq('id', session.id)
+    await db.from('audit_log').insert({
+      actor_type: 'user', actor_id: session.id, action: 'lgpd_consent_given', record_type: 'wa_session', record_id: session.id,
+    })
+  }
+
+  const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MS).toISOString()
+  const { count } = await db
+    .from('wa_messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('session_id', session.id)
+    .eq('direction', 'inbound')
+    .gte('sent_at', windowStart)
+  if ((count ?? 0) >= RATE_LIMIT_MAX) {
+    console.warn('[whatsapp] rate limit excedido para sessão:', session.id)
+    return
+  }
+
+  // Histórico carregado antes de gravar a mensagem atual (evita duplicata no contexto)
+  const { data: historyMsgs } = await db
+    .from('wa_messages')
+    .select('direction, body')
+    .eq('session_id', session.id)
+    .order('sent_at', { ascending: false })
+    .limit(20)
+
+  await storeInbound()
+
+  // SIM/NÃO à pergunta em aberto (proposta, lembrete, sugestão da recepção) — resolvido em código
+  const pendingReply = await resolvePendingReply(db, session.id, text)
+  if (pendingReply) {
+    await sendAndLog(db, waSession, pendingReply)
+    return
+  }
+
+  await maybeCreateApprovalIntercept({ text, sessionId: session.id })
+
+  const history: { role: string; content: string }[] = []
+  for (const m of (historyMsgs ?? []).reverse()) {
+    const content = (m.body as string | null)?.trim()
+    if (!content) continue
+    const role = m.direction === 'inbound' ? 'user' : 'assistant'
+    const last = history[history.length - 1]
+    if (last?.role === role) last.content += '\n' + content
+    else history.push({ role, content })
+  }
+
+  const { response } = await processMessage({ message: text, sessionId: session.id, history })
+  const sent = await sendAndLog(db, waSession, response)
+  if (sent.ok) {
+    await db.from('audit_log').insert({
+      actor_type: 'agent', actor_id: 'assistente-agendamento', action: 'whatsapp_send',
+      record_type: 'wa_message', record_id: sent.id ?? 'unknown',
+    })
   }
 }

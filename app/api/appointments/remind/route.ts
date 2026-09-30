@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
-import { getClinicBasicConfig } from '@/lib/clinic-config-server'
+import { getClinicBasicConfig, capitalize, artigo } from '@/lib/clinic-config-server'
+import { setPendingAction, PENDING_TTL } from '@/lib/pending-action'
 
 const WA_TOKEN    = process.env.WHATSAPP_API_TOKEN
 const WA_PHONE_ID = process.env.WHATSAPP_PHONE_NUMBER_ID
@@ -18,7 +19,7 @@ export async function GET(req: NextRequest) {
   }
 
   const db = createServerClient()
-  const { clinicName } = await getClinicBasicConfig()
+  const { clinicName, vocabulary: voc } = await getClinicBasicConfig()
   const now = Date.now()
   const windowStart = new Date(now + WINDOW_MIN_H * 60 * 60 * 1000).toISOString()
   const windowEnd   = new Date(now + WINDOW_MAX_H * 60 * 60 * 1000).toISOString()
@@ -62,13 +63,14 @@ export async function GET(req: NextRequest) {
     const timeStr = d.toLocaleTimeString('pt-BR', {
       hour: '2-digit', minute: '2-digit', timeZone: 'UTC',
     })
-    const patientName = patient?.name ?? 'Paciente'
+    const patientName = patient?.name ?? capitalize(voc.client)
+    const a = artigo(voc.appointment)
 
     const msg =
-      `🏥 *${clinicName} — Lembrete de Consulta*\n\n` +
-      `Olá, *${patientName}*! Sua consulta está marcada para *amanhã*:\n\n` +
+      `${voc.emoji} *${clinicName} — Lembrete*\n\n` +
+      `Olá, *${patientName}*! ${a === 'a' ? 'Sua' : 'Seu'} ${voc.appointment} está marcad${a} para *amanhã*:\n\n` +
       `📅 ${dateStr} às *${timeStr}*\n` +
-      `👨‍⚕️ ${doctor?.name ?? ''} — ${doctor?.specialty ?? ''}\n\n` +
+      `👤 ${doctor?.name ?? ''} — ${doctor?.specialty ?? ''}\n\n` +
       `Você confirma a presença?\n` +
       `Responda *SIM* para confirmar ou *NÃO* para cancelar.`
 
@@ -95,9 +97,10 @@ export async function GET(req: NextRequest) {
       continue
     }
 
-    // Marca lembrete como enviado e registra a mensagem
+    // Marca lembrete como enviado e registra a mensagem; o SIM/NÃO do cliente passa a responder este lembrete
     await Promise.all([
       db.from('appointments').update({ reminder_sent_at: new Date().toISOString() }).eq('id', appt.id),
+      setPendingAction(db, session.id, { kind: 'reminder', appointment_id: appt.id }, PENDING_TTL.reminder),
       db.from('wa_messages').insert({
         session_id: session.id, direction: 'outbound', body: msg, status: 'sent',
       }),

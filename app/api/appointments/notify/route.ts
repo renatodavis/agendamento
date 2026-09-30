@@ -1,31 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
-import { getClinicBasicConfig } from '@/lib/clinic-config-server'
-
-const WA_TOKEN    = process.env.WHATSAPP_API_TOKEN
-const WA_PHONE_ID = process.env.WHATSAPP_PHONE_NUMBER_ID
-
-async function sendWhatsApp(phone: string, text: string) {
-  if (!WA_TOKEN || !WA_PHONE_ID) return { skipped: true }
-
-  const res = await fetch(
-    `https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${WA_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        to: phone,
-        type: 'text',
-        text: { body: text },
-      }),
-    }
-  )
-  return res.json()
-}
+import { requireAuth } from '@/lib/auth'
+import { getClinicBasicConfig, capitalize, artigo } from '@/lib/clinic-config-server'
+import { sendWhatsAppText, sendAndLog } from '@/lib/whatsapp'
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString('pt-BR', {
@@ -35,17 +12,22 @@ function formatDate(iso: string) {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAuth()
+  if (auth instanceof NextResponse) return auth
+
   try {
     const { appointmentId, type, reason, cancelledBy } = await req.json()
 
     if (!appointmentId || !type) {
       return NextResponse.json({ error: 'appointmentId e type são obrigatórios' }, { status: 400 })
     }
+    if (type !== 'cancel') {
+      return NextResponse.json({ error: `Tipo de notificação desconhecido: ${type}` }, { status: 400 })
+    }
 
     const db = createServerClient()
-    const { clinicName } = await getClinicBasicConfig()
+    const { clinicName, vocabulary: voc } = await getClinicBasicConfig()
 
-    // Load appointment with patient + doctor + wa_session phone
     const { data: appt, error } = await db
       .from('appointments')
       .select(`
@@ -57,85 +39,51 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (error || !appt) {
-      return NextResponse.json({ error: 'Consulta não encontrada' }, { status: 404 })
+      return NextResponse.json({ error: 'Agendamento não encontrado' }, { status: 404 })
     }
 
-    // Get patient phone: prefer wa_session phone (matches WhatsApp), fallback to patients.phone
     type Patient = { id: string; name: string; phone: string | null }
     type Doctor  = { name: string; specialty: string }
-    const patient  = appt.patient as unknown as Patient | null
-    const doctor   = appt.doctor  as unknown as Doctor  | null
-    const patientId = patient?.id
-    let phone: string | null = patient?.phone ?? null
+    const patient = appt.patient as unknown as Patient | null
+    const doctor  = appt.doctor  as unknown as Doctor  | null
 
-    if (patientId) {
-      const { data: session } = await db
-        .from('wa_sessions')
-        .select('phone')
-        .eq('patient_id', patientId)
-        .limit(1)
-        .single()
-      if (session?.phone) phone = session.phone
-    }
+    // Prefere o telefone da sessão do WhatsApp; senão, o do cadastro
+    const { data: session } = patient?.id
+      ? await db.from('wa_sessions').select('id, phone').eq('patient_id', patient.id).limit(1).maybeSingle()
+      : { data: null }
+    const phone = session?.phone ?? patient?.phone ?? null
 
     if (!phone) {
-      return NextResponse.json({ ok: false, reason: 'Paciente sem telefone cadastrado no WhatsApp' })
+      return NextResponse.json({ ok: false, reason: `${capitalize(voc.client)} sem telefone cadastrado no WhatsApp` })
     }
 
-    const patientName = patient?.name ?? 'Paciente'
-    const doctorName  = doctor?.name  ?? 'Médico'
+    const a           = artigo(voc.appointment)
+    const patientName = patient?.name ?? capitalize(voc.client)
+    const doctorName  = doctor?.name ?? capitalize(voc.professional)
     const specialty   = doctor?.specialty ?? ''
     const dateStr     = formatDate(appt.scheduled_at)
+    const reasonStr   = reason ? `\n*Motivo:* ${reason}` : ''
+    const byBusiness  = !cancelledBy || cancelledBy === 'clinic'
 
-    let message = ''
+    const message = byBusiness
+      ? `Olá, *${patientName}*! 😔\n\n` +
+        `Informamos que ${a === 'a' ? 'sua' : 'seu'} ${voc.appointment} com *${doctorName}* (${specialty}) ` +
+        `agendad${a} para *${dateStr}* precisou ser cancelad${a}.${reasonStr}\n\n` +
+        `Pedimos desculpas pelo transtorno. ${voc.emoji}\n\n` +
+        `Deseja *remarcar* para um novo horário? É só responder aqui.`
+      : `Olá, *${patientName}*!\n\n` +
+        `Confirmamos o cancelamento d${a} ${voc.appointment} com *${doctorName}* (${specialty}) ` +
+        `agendad${a} para *${dateStr}*.${reasonStr}\n\n` +
+        `Deseja *remarcar* para outro horário? É só responder aqui. — ${clinicName} ${voc.emoji}`
 
-    if (type === 'cancel') {
-      const byClinic  = !cancelledBy || cancelledBy === 'clinic'
-      const reasonStr = reason ? `\n*Motivo:* ${reason}` : ''
-
-      if (byClinic) {
-        message =
-          `Olá, *${patientName}*! 😔\n\n` +
-          `Informamos que sua consulta com *${doctorName}* (${specialty}) ` +
-          `agendada para *${dateStr}* precisou ser cancelada pela clínica.${reasonStr}\n\n` +
-          `Pedimos desculpas pelo transtorno. 🏥\n\n` +
-          `Deseja *remarcar* para um novo horário?\n\n` +
-          `Responda *SIM* para agendar ou *NÃO* se não precisar.`
-      } else {
-        message =
-          `Olá, *${patientName}*!\n\n` +
-          `Confirmamos o cancelamento da sua consulta com *${doctorName}* (${specialty}) ` +
-          `agendada para *${dateStr}*.${reasonStr}\n\n` +
-          `Deseja *remarcar* para outro horário?\n\n` +
-          `Responda *SIM* para agendar ou *NÃO* se não precisar. — ${clinicName} 🏥`
-      }
+    if (session?.id) {
+      // Pergunta aberta: descarta proposta antiga para que a resposta vá ao assistente
+      await db.from('wa_sessions').update({ pending_action: null }).eq('id', session.id)
+      await sendAndLog(db, { id: session.id, phone }, message)
     } else {
-      return NextResponse.json({ error: `Tipo de notificação desconhecido: ${type}` }, { status: 400 })
+      await sendWhatsAppText(phone, message)
     }
 
-    // Send WhatsApp
-    const waResult = await sendWhatsApp(phone, message)
-
-    // Store outbound message in wa_messages if there's a session
-    if (patientId) {
-      const { data: session } = await db
-        .from('wa_sessions')
-        .select('id')
-        .eq('patient_id', patientId)
-        .limit(1)
-        .single()
-
-      if (session?.id) {
-        await db.from('wa_messages').insert({
-          session_id: session.id,
-          direction: 'outbound',
-          body: message,
-          status: 'sent',
-        })
-      }
-    }
-
-    // Audit log
     await db.from('audit_log').insert({
       actor_type: 'agent',
       actor_id:   'sistema-notificacoes',
@@ -144,7 +92,7 @@ export async function POST(req: NextRequest) {
       record_id:   appointmentId,
     })
 
-    return NextResponse.json({ ok: true, phone, waResult })
+    return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[appointments/notify] error:', err)
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 })

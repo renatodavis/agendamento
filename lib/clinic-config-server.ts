@@ -56,3 +56,18 @@ export async function getClinicBasicConfig(): Promise<ClinicBasicConfig> {
 export function invalidateClinicBasicConfigCache() {
   _cache = null
 }
+
+export const isHealthBusiness = (businessNoun: string) => /cl[ií]nica|consult[oó]rio|sa[uú]de/i.test(businessNoun)
+
+export const capitalize =(s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
+// Concordância simples de gênero: "consulta" → "a", "atendimento" → "o"
+export const artigo = (noun: string) => (noun.endsWith('a') ? 'a' : 'o')
+
+export function fmtSlot(iso: string) {
+  const d = new Date(iso)
+  return {
+    date: d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }),
+    time: d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }),
+  }
+}

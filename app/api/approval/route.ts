@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
-import { getClinicBasicConfig } from '@/lib/clinic-config-server'
+import { getClinicBasicConfig, capitalize, artigo } from '@/lib/clinic-config-server'
+import { setPendingAction, PENDING_TTL } from '@/lib/pending-action'
+import { sendAndLog, sendWhatsAppText } from '@/lib/whatsapp'
 
 // ── GET: lista approval_requests pendentes (service role bypassa RLS) ──
 export async function GET(req: NextRequest) {
@@ -29,39 +31,14 @@ export async function GET(req: NextRequest) {
 // /api/approval?count=1
 // Mantido no mesmo handler acima via query param — veja ApprovalPanel.
 
-const WA_TOKEN    = process.env.WHATSAPP_API_TOKEN
-const WA_PHONE_ID = process.env.WHATSAPP_PHONE_NUMBER_ID
-
-async function sendWhatsApp(phone: string, text: string) {
-  if (!WA_TOKEN || !WA_PHONE_ID) return
-  await fetch(`https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messaging_product: 'whatsapp', to: phone, type: 'text', text: { body: text } }),
-  })
-}
-
-async function getSessionPhone(db: ReturnType<typeof createServerClient>, sessionId: string | null) {
-  if (!sessionId) return null
-  const { data } = await db.from('wa_sessions').select('phone, id').eq('id', sessionId).single()
-  return data ?? null
-}
-
 async function notifyAndLog(
   db: ReturnType<typeof createServerClient>,
   sessionId: string | null,
   message: string
 ) {
-  const session = await getSessionPhone(db, sessionId)
-  if (session?.phone) {
-    await sendWhatsApp(session.phone, message)
-    await db.from('wa_messages').insert({
-      session_id: session.id,
-      direction: 'outbound',
-      body: message,
-      status: 'sent',
-    })
-  }
+  if (!sessionId) return
+  const { data: session } = await db.from('wa_sessions').select('id, phone').eq('id', sessionId).single()
+  if (session?.phone) await sendAndLog(db, session, message)
 }
 
 export async function POST(req: NextRequest) {
@@ -83,8 +60,7 @@ export async function POST(req: NextRequest) {
 
     if (error || !approval) return NextResponse.json({ error: 'Aprovação não encontrada' }, { status: 404 })
 
-    const clientLabel = voc.client.charAt(0).toUpperCase() + voc.client.slice(1)
-    const patientName = approval.patient_name ?? clientLabel
+    const patientName = approval.patient_name ?? capitalize(voc.client)
     const now = new Date().toISOString()
 
     // Helper: format appointment details from details jsonb or doctor join
@@ -111,8 +87,14 @@ export async function POST(req: NextRequest) {
         reviewed_by: 'receptionist',
       }).eq('id', id)
 
-      if (approval.session_id && approval.message_to_patient) {
-        if (notify) await notifyAndLog(db, approval.session_id, approval.message_to_patient)
+      if (notify && approval.session_id && approval.message_to_patient) {
+        await notifyAndLog(db, approval.session_id, approval.message_to_patient)
+        if (approval.patient_id && approval.doctor_id && approval.suggested_at) {
+          await setPendingAction(db, approval.session_id, {
+            kind: 'book', patient_id: approval.patient_id, doctor_id: approval.doctor_id,
+            scheduled_at: approval.suggested_at, status: 'agendada', approval_id: approval.id,
+          }, PENDING_TTL.approval)
+        }
       }
 
       await db.from('audit_log').insert({
@@ -162,7 +144,7 @@ export async function POST(req: NextRequest) {
       if (apptId) {
         const { error: cancelErr } = await db.from('appointments').update({
           status: 'cancelada',
-          cancel_reason: 'Solicitado pelo paciente via WhatsApp',
+          cancel_reason: `Solicitado pel${artigo(voc.client)} ${voc.client} via WhatsApp`,
         }).eq('id', apptId)
         if (cancelErr) {
           console.error('[approval confirm_cancel] appointments update failed:', cancelErr)
@@ -179,7 +161,7 @@ export async function POST(req: NextRequest) {
       }).eq('id', id)
 
       const apptLine = apptStr && doctorName
-        ? `📅 *${apptStr}*\n👨‍⚕️ ${doctorName}${doctorSpec ? ` (${doctorSpec})` : ''}\n\n`
+        ? `📅 *${apptStr}*\n👤 ${doctorName}${doctorSpec ? ` (${doctorSpec})` : ''}\n\n`
         : apptStr ? `📅 *${apptStr}*\n\n` : ''
       const msg =
         `Olá, *${patientName}*! ✅\n\n` +
@@ -201,7 +183,7 @@ export async function POST(req: NextRequest) {
 
       const isAlteracao = approval.request_type === 'alteracao_horario'
       const apptInfo = apptStr
-        ? `\n📅 *${apptStr}*${doctorName ? `\n👨‍⚕️ ${doctorName}` : ''}\n`
+        ? `\n📅 *${apptStr}*${doctorName ? `\n👤 ${doctorName}` : ''}\n`
         : ''
       const apptWord = voc.appointment
       const apptCap  = apptWord.charAt(0).toUpperCase() + apptWord.slice(1)
@@ -240,13 +222,18 @@ export async function POST(req: NextRequest) {
       const fdocName = fd?.doctor_name ?? doctorName
       const fdocSpec = fd?.doctor_specialty ?? doctorSpec
 
-      // Cancela o agendamento agora que a recepção aprovou
+      // Guarda profissional e cliente antes de cancelar, para a sugestão virar proposta confirmável
+      let bookDoctorId: string | null = approval.doctor_id ?? null
+      let bookPatientId: string | null = approval.patient_id ?? null
       if (apptId) {
+        const { data: orig } = await db.from('appointments').select('doctor_id, patient_id').eq('id', apptId).maybeSingle()
+        bookDoctorId  = bookDoctorId  ?? orig?.doctor_id ?? null
+        bookPatientId = bookPatientId ?? orig?.patient_id ?? null
         await db.from('appointments').update({
           status: 'cancelada',
           cancel_reason: fd?.block_reason
-            ? `Bloqueio de agenda do médico: ${fd.block_reason}`
-            : 'Bloqueio de agenda do médico',
+            ? `Bloqueio de agenda d${artigo(voc.professional)} ${voc.professional}: ${fd.block_reason}`
+            : `Bloqueio de agenda d${artigo(voc.professional)} ${voc.professional}`,
         }).eq('id', apptId)
       }
 
@@ -264,7 +251,7 @@ export async function POST(req: NextRequest) {
           `Informamos que houve um imprevisto e ${voc.appointment} precisou ser cancelad${voc.appointment.endsWith('a') ? 'a' : 'o'}.\n\n` +
           `Sugerimos um novo horário para reagendamento:\n` +
           `📅 *${newDate} às ${newTime}*\n` +
-          (fdocName ? `👨‍⚕️ ${fdocName}${fdocSpec ? ` (${fdocSpec})` : ''}\n\n` : '\n') +
+          (fdocName ? `👤 ${fdocName}${fdocSpec ? ` (${fdocSpec})` : ''}\n\n` : '\n') +
           `Se esse horário for conveniente, é só confirmar! Caso contrário, nos diga sua preferência. Pedimos desculpas pelo transtorno. — ${clinicName} ${voc.emoji}`
       } else {
         msg =
@@ -272,19 +259,27 @@ export async function POST(req: NextRequest) {
           `Informamos que houve um imprevisto e ${voc.appointment} precisou ser cancelad${voc.appointment.endsWith('a') ? 'a' : 'o'}.\n\n` +
           `Por favor, entre em contato para reagendar em uma data de sua preferência. Pedimos desculpas pelo transtorno. — ${clinicName} ${voc.emoji}`
       }
-      // Se não há session_id (paciente cadastrado pelo admin), busca telefone direto em patients
-      if (notify && approval.session_id) {
-        await notifyAndLog(db, approval.session_id, msg)
-      } else if (notify && approval.patient_id) {
-        const { data: pat } = await db.from('patients').select('phone').eq('id', approval.patient_id).single()
-        if (pat?.phone) {
-          await sendWhatsApp(pat.phone, msg)
-          // Salva em wa_messages para que o bot tenha contexto na próxima resposta do paciente
-          const { data: sess } = await db.from('wa_sessions').select('id').eq('phone', pat.phone).single()
-          if (sess?.id) {
-            await db.from('wa_messages').insert({
-              session_id: sess.id, direction: 'outbound', body: msg, status: 'sent',
-            })
+      if (notify) {
+        // Sem session_id (cliente cadastrado pelo painel): localiza a sessão pelo telefone do cadastro
+        let session: { id: string; phone: string } | null = null
+        if (approval.session_id) {
+          const { data } = await db.from('wa_sessions').select('id, phone').eq('id', approval.session_id).maybeSingle()
+          session = data
+        } else if (approval.patient_id) {
+          const { data: pat } = await db.from('patients').select('phone').eq('id', approval.patient_id).maybeSingle()
+          if (pat?.phone) {
+            const { data } = await db.from('wa_sessions').select('id, phone').eq('phone', pat.phone).maybeSingle()
+            session = data
+            if (!session) await sendWhatsAppText(pat.phone, msg)
+          }
+        }
+        if (session?.phone) {
+          await sendAndLog(db, session, msg)
+          if (newIso && bookDoctorId && bookPatientId) {
+            await setPendingAction(db, session.id, {
+              kind: 'book', patient_id: bookPatientId, doctor_id: bookDoctorId,
+              scheduled_at: newIso, status: 'agendada',
+            }, PENDING_TTL.approval)
           }
         }
       }
@@ -302,10 +297,16 @@ export async function POST(req: NextRequest) {
         const { error: updErr } = await db.from('appointments')
           .update({ scheduled_at: newIso, status: 'agendada' })
           .eq('id', apptId)
+        if (updErr?.code === '23505') {
+          return NextResponse.json({ error: 'O novo horário já está ocupado. Combine outro horário com o cliente.' }, { status: 409 })
+        }
         if (updErr) {
           console.error('[approval resolve] falha ao remarcar appointment:', updErr)
         } else {
           rescheduled = true
+          await db.from('audit_log').insert({
+            actor_type: 'receptionist', actor_id: 'recepcao', action: 'appointment_rescheduled', record_type: 'appointment', record_id: apptId,
+          })
         }
       }
 
@@ -318,20 +319,21 @@ export async function POST(req: NextRequest) {
         const d = new Date(newIso)
         const newDate = d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })
         const newTime = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
+        const a = artigo(voc.appointment)
         msg =
           `Olá, *${patientName}*! ✅\n\n` +
-          `Sua consulta foi remarcada com sucesso!\n\n` +
+          `${a === 'a' ? 'Sua' : 'Seu'} ${voc.appointment} foi remarcad${a} com sucesso!\n\n` +
           `📅 *${newDate} às ${newTime}*\n` +
-          (doctorName ? `👨‍⚕️ ${doctorName}${doctorSpec ? ` (${doctorSpec})` : ''}\n\n` : '\n') +
-          `Até lá! — ${clinicName} 🏥`
+          (doctorName ? `👤 ${doctorName}${doctorSpec ? ` (${doctorSpec})` : ''}\n\n` : '\n') +
+          `Até lá! — ${clinicName} ${voc.emoji}`
       } else {
         const apptInfo = apptStr
-          ? `\n📅 *${apptStr}*${doctorName ? `\n👨‍⚕️ ${doctorName}` : ''}\n`
+          ? `\n📅 *${apptStr}*${doctorName ? `\n👤 ${doctorName}` : ''}\n`
           : ''
         msg =
           `Olá, *${patientName}*! 🗓\n\n` +
           `Sua solicitação de remarcação foi processada. Nossa equipe entrará em contato para confirmar o novo horário.${apptInfo}\n` +
-          `${clinicName} 🏥`
+          `${clinicName} ${voc.emoji}`
       }
       if (notify) await notifyAndLog(db, approval.session_id, msg)
       return NextResponse.json({ ok: true, action: 'resolve', rescheduled })
