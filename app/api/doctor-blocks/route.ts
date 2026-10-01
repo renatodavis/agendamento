@@ -4,6 +4,9 @@ import { requireAuth } from '@/lib/auth'
 import { processBlockAffectedAppointments } from '@/lib/doctor-blocks-processor'
 
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth()
+  if (auth instanceof NextResponse) return auth
+
   const { searchParams } = new URL(req.url)
   const doctorId = searchParams.get('doctor_id')
   const db = createServerClient()

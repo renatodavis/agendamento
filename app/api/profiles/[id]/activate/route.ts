@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { invalidateClinicBasicConfigCache } from '@/lib/clinic-config-server'
+import { requireAuth } from '@/lib/auth'
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireAuth()
+  if (auth instanceof NextResponse) return auth
+
   const { id } = await params
   const db = createServerClient()
 

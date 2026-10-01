@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { requireAuth } from '@/lib/auth'
 
 export const revalidate = 0
 
@@ -16,6 +17,9 @@ type LangfuseTrace = {
 
 // Busca as últimas interações reais do bot no Langfuse para popular o Log de Agentes
 export async function GET() {
+  const auth = await requireAuth()
+  if (auth instanceof NextResponse) return auth
+
   if (!PUBLIC_KEY || !SECRET_KEY) {
     return NextResponse.json({ entries: [] })
   }
