@@ -21,7 +21,8 @@ type Appt = {
 // Roda uma vez por dia (vercel.json) e lembra todos os agendamentos de amanhã (horário de Brasília).
 // reminder_sent_at impede lembrete duplicado se a rotina rodar mais de uma vez.
 export async function GET(req: NextRequest) {
-  if (CRON_SECRET && req.headers.get('authorization') !== `Bearer ${CRON_SECRET}`) {
+  // Sem CRON_SECRET a rota fica fechada: qualquer um poderia disparar lembretes.
+  if (!CRON_SECRET || req.headers.get('authorization') !== `Bearer ${CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

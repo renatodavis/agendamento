@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { requireAuth } from '@/lib/auth'
 
 export async function GET(req: NextRequest) {
+  const auth = await requireAuth()
+  if (auth instanceof NextResponse) return auth
+
   const db = createServerClient()
   const { searchParams } = new URL(req.url)
   const search = searchParams.get('q')?.trim().toLowerCase()

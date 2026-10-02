@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { requireAuth } from '@/lib/auth'
 
 export const revalidate = 0
 
 export async function GET() {
+  const auth = await requireAuth()
+  if (auth instanceof NextResponse) return auth
+
   const db = createServerClient()
   const { data } = await db
     .from('clinic_config')
@@ -21,16 +25,4 @@ export async function GET() {
   }
 
   return NextResponse.json({ ok: false, error: val.error, at: val.at })
-}
-
-// Chamado internamente por chat.ts para registrar/limpar o erro
-export async function POST(req: Request) {
-  const { error } = await req.json() as { error: string | null }
-  const db = createServerClient()
-  // value é NOT NULL — usar { error: null } em vez de null para limpar
-  await db.from('clinic_config').upsert(
-    { key: 'ai_credit_error', value: { error, at: new Date().toISOString() } },
-    { onConflict: 'key' }
-  )
-  return NextResponse.json({ ok: true })
 }

@@ -40,7 +40,8 @@ cp .env.example .env.local
 | `WHATSAPP_PHONE_NUMBER_ID` | ID do número WhatsApp |
 | `WHATSAPP_VERIFY_TOKEN` | Token de verificação do webhook Meta |
 | `NEXT_PUBLIC_APP_URL` | URL pública do app (ex: `https://meuapp.vercel.app`) |
-| `CRON_SECRET` | Segredo para proteger a rota de lembretes (`/api/appointments/remind`) |
+| `WHATSAPP_APP_SECRET` | App Secret do app Meta — obrigatório em produção (valida a assinatura do webhook) |
+| `CRON_SECRET` | Obrigatório — sem ele a rota de lembretes (`/api/appointments/remind`) recusa todas as chamadas |
 | `LANGFUSE_SECRET_KEY` | (Opcional) Monitoramento de custo LLM |
 | `LANGFUSE_PUBLIC_KEY` | (Opcional) |
 | `LANGFUSE_BASE_URL` | (Opcional) — padrão: `https://cloud.langfuse.com` |

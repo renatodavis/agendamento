@@ -3,6 +3,9 @@ import { createServerClient } from '@/lib/supabase'
 import { requireAuth } from '@/lib/auth'
 
 export async function GET() {
+  const auth = await requireAuth()
+  if (auth instanceof NextResponse) return auth
+
   const db = createServerClient()
   const { data, error } = await db.from('doctors').select('id, name, specialty').order('specialty')
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

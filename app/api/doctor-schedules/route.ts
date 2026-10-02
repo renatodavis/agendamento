@@ -22,6 +22,9 @@ type DoctorWithSchedules = {
 
 // GET /api/doctor-schedules — list all doctors with their schedules
 export async function GET() {
+  const auth = await requireAuth()
+  if (auth instanceof NextResponse) return auth
+
   const db = createServerClient()
   const { data: doctors, error } = await db
     .from('doctors')
