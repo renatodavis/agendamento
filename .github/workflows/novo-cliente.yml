@@ -37,6 +37,7 @@ jobs:
         run: |
           DB_PASSWORD=$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24)
           echo "::add-mask::$DB_PASSWORD"
+          echo "db_password=$DB_PASSWORD" >> "$GITHUB_OUTPUT"
 
           RESPONSE=$(supabase projects create "${{ inputs.name }}" \
             --org-id "${{ secrets.SUPABASE_ORG_ID }}" \
@@ -61,7 +62,8 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          supabase link --project-ref "${{ steps.supabase.outputs.project_id }}"
+          supabase link --project-ref "${{ steps.supabase.outputs.project_id }}" \
+            --password "${{ steps.supabase.outputs.db_password }}"
           supabase db push
 
       - name: Buscar chaves do projeto
@@ -166,7 +168,9 @@ jobs:
             echo "| URL esperada | https://${{ inputs.slug }}.${{ secrets.BASE_DOMAIN }} |"
             echo ""
             echo "### Próximos passos manuais"
-            echo "1. Vercel → Settings → Domains → adicionar \`${{ inputs.slug }}.${{ secrets.BASE_DOMAIN }}\`"
-            echo "2. Vercel → Settings → Environment Variables → adicionar \`ANTHROPIC_API_KEY\`, \`WHATSAPP_*\`"
-            echo "3. Meta Developer → WABA → configurar webhook override para a nova URL"
+            echo "1. **GitHub** → Settings → Secrets → \`SUPABASE_DB_PASSWORDS\` → adicionar entrada \`\"${{ inputs.slug }}\": \"<senha>\"\`"
+            echo "   - Senha disponível em: Supabase Dashboard → projeto → Settings → Database"
+            echo "2. Vercel → Settings → Domains → adicionar \`${{ inputs.slug }}.${{ secrets.BASE_DOMAIN }}\`"
+            echo "3. Vercel → Settings → Environment Variables → adicionar \`ANTHROPIC_API_KEY\`, \`WHATSAPP_*\`"
+            echo "4. Meta Developer → WABA → configurar webhook override para a nova URL"
           } >> "$GITHUB_STEP_SUMMARY"

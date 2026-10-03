@@ -47,8 +47,15 @@ jobs:
       - name: Aplicar migrações — ${{ matrix.cliente.slug }}
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORDS: ${{ secrets.SUPABASE_DB_PASSWORDS }}
         run: |
-          supabase link --project-ref "${{ matrix.cliente.supabase_project_id }}"
+          SLUG="${{ matrix.cliente.slug }}"
+          DB_PASS=$(echo "$SUPABASE_DB_PASSWORDS" | jq -r --arg s "$SLUG" '.[$s] // empty')
+          if [ -z "$DB_PASS" ]; then
+            echo "::error::Senha não encontrada para '$SLUG' em SUPABASE_DB_PASSWORDS"
+            exit 1
+          fi
+          supabase link --project-ref "${{ matrix.cliente.supabase_project_id }}" --password "$DB_PASS"
           supabase db push
 
       - name: Re-deploy Vercel — ${{ matrix.cliente.slug }}
