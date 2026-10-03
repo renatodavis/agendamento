@@ -11,10 +11,15 @@ export type ActiveProfile = {
 let cached: ActiveProfile | undefined = undefined
 
 export function useActiveProfile(): ActiveProfile {
-  const [profile, setProfile] = useState<ActiveProfile>(cached ?? null)
+  // Sempre inicializa com null para garantir HTML idêntico entre SSR e cliente.
+  // Se cached já existe (navegação SPA), o useEffect sincroniza sem fetch.
+  const [profile, setProfile] = useState<ActiveProfile>(null)
 
   useEffect(() => {
-    if (cached !== undefined) return
+    if (cached !== undefined) {
+      setProfile(cached)
+      return
+    }
     fetch('/api/profiles/active')
       .then(r => r.ok ? r.json() : null)
       .then(data => {
