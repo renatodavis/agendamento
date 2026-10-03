@@ -1,6 +1,8 @@
 # Supabase CLI configuration
 # https://supabase.com/docs/reference/cli/config
 
+project_id = "agendamento"
+
 [api]
 port = 54321
 schemas = ["public", "graphql_public"]
