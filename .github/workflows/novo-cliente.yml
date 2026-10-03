@@ -1,0 +1,170 @@
+name: Provisionar novo cliente
+
+on:
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: "Identificador único, sem espaços (ex: clinica-exemplo)"
+        required: true
+      name:
+        description: "Nome do cliente (ex: Clínica Exemplo)"
+        required: true
+      region:
+        description: "Região Supabase"
+        required: false
+        default: "sa-east-1"
+
+jobs:
+  provisionar:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Supabase CLI
+        run: |
+          curl -sL https://github.com/supabase/cli/releases/download/v1.200.3/supabase_linux_amd64.tar.gz | tar xz
+          sudo mv supabase /usr/local/bin/supabase
+
+      # ── Supabase ────────────────────────────────────────────────────────────
+      - name: Criar projeto Supabase
+        id: supabase
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          DB_PASSWORD=$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24)
+          echo "::add-mask::$DB_PASSWORD"
+
+          RESPONSE=$(supabase projects create "${{ inputs.name }}" \
+            --org-id "${{ secrets.SUPABASE_ORG_ID }}" \
+            --db-password "$DB_PASSWORD" \
+            --region "${{ inputs.region }}" \
+            --output json)
+
+          PROJECT_ID=$(echo "$RESPONSE" | jq -r '.id')
+          echo "project_id=$PROJECT_ID" >> "$GITHUB_OUTPUT"
+
+          # Aguarda projeto ficar ativo (máx 5 min)
+          for i in $(seq 1 30); do
+            STATUS=$(supabase projects list --output json \
+              | jq -r ".[] | select(.id==\"$PROJECT_ID\") | .status")
+            echo "Status [$i/30]: $STATUS"
+            [ "$STATUS" = "ACTIVE_HEALTHY" ] && break
+            sleep 10
+          done
+          [ "$STATUS" != "ACTIVE_HEALTHY" ] && { echo "Timeout: projeto não ficou saudável"; exit 1; }
+
+      - name: Aplicar migrações
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase db push --project-ref "${{ steps.supabase.outputs.project_id }}"
+
+      - name: Buscar chaves do projeto
+        id: keys
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          KEYS=$(curl -sf \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/${{ steps.supabase.outputs.project_id }}/api-keys")
+
+          ANON=$(echo "$KEYS" | jq -r '.[] | select(.name=="anon") | .api_key')
+          SERVICE=$(echo "$KEYS" | jq -r '.[] | select(.name=="service_role") | .api_key')
+          echo "::add-mask::$SERVICE"
+
+          echo "anon_key=$ANON" >> "$GITHUB_OUTPUT"
+          echo "service_key=$SERVICE" >> "$GITHUB_OUTPUT"
+
+      # ── Vercel ──────────────────────────────────────────────────────────────
+      - name: Criar projeto Vercel
+        id: vercel
+        run: |
+          RESPONSE=$(curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"name\": \"agendamento-${{ inputs.slug }}\",
+              \"framework\": \"nextjs\",
+              \"gitRepository\": {
+                \"type\": \"github\",
+                \"repo\": \"${{ github.repository }}\"
+              }
+            }" \
+            "https://api.vercel.com/v10/projects${{ secrets.VERCEL_TEAM_ID != '' && format('?teamId={0}', secrets.VERCEL_TEAM_ID) || '' }}")
+
+          PROJECT_ID=$(echo "$RESPONSE" | jq -r '.id')
+          echo "project_id=$PROJECT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Configurar variáveis de ambiente no Vercel
+        run: |
+          SUP_URL="https://${{ steps.supabase.outputs.project_id }}.supabase.co"
+          APP_URL="https://${{ inputs.slug }}.${{ secrets.BASE_DOMAIN }}"
+
+          TEAM_PARAM="${{ secrets.VERCEL_TEAM_ID != '' && format('?teamId={0}', secrets.VERCEL_TEAM_ID) || '' }}"
+
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "[
+              {\"key\":\"NEXT_PUBLIC_SUPABASE_URL\",\"value\":\"$SUP_URL\",\"type\":\"plain\",\"target\":[\"production\",\"preview\"]},
+              {\"key\":\"NEXT_PUBLIC_SUPABASE_ANON_KEY\",\"value\":\"${{ steps.keys.outputs.anon_key }}\",\"type\":\"plain\",\"target\":[\"production\",\"preview\"]},
+              {\"key\":\"SUPABASE_SERVICE_ROLE_KEY\",\"value\":\"${{ steps.keys.outputs.service_key }}\",\"type\":\"sensitive\",\"target\":[\"production\"]},
+              {\"key\":\"NEXT_PUBLIC_APP_URL\",\"value\":\"$APP_URL\",\"type\":\"plain\",\"target\":[\"production\"]}
+            ]" \
+            "https://api.vercel.com/v10/projects/${{ steps.vercel.outputs.project_id }}/env$TEAM_PARAM"
+
+      # ── Registro ────────────────────────────────────────────────────────────
+      - name: Atualizar clients.json e commitar
+        run: |
+          jq --arg slug "${{ inputs.slug }}" \
+             --arg name "${{ inputs.name }}" \
+             --arg sup_id "${{ steps.supabase.outputs.project_id }}" \
+             --arg ver_id "${{ steps.vercel.outputs.project_id }}" \
+             --arg sub "${{ inputs.slug }}" \
+             '. + [{slug: $slug, name: $name, subdomain: $sub, supabase_project_id: $sup_id, vercel_project_id: $ver_id}]' \
+             clients.json > clients.tmp && mv clients.tmp clients.json
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add clients.json
+          git commit -m "chore: provisionar cliente ${{ inputs.slug }}"
+          git push
+
+      # ── Deploy inicial ───────────────────────────────────────────────────────
+      - name: Disparar primeiro deploy
+        run: |
+          TEAM_PARAM="${{ secrets.VERCEL_TEAM_ID != '' && format('?teamId={0}', secrets.VERCEL_TEAM_ID) || '' }}"
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"name\": \"agendamento-${{ inputs.slug }}\",
+              \"project\": \"${{ steps.vercel.outputs.project_id }}\",
+              \"target\": \"production\",
+              \"gitSource\": {
+                \"type\": \"github\",
+                \"ref\": \"main\",
+                \"repoId\": \"${{ github.repository_id }}\"
+              }
+            }" \
+            "https://api.vercel.com/v13/deployments$TEAM_PARAM"
+
+      - name: Resumo
+        run: |
+          {
+            echo "## ✅ Cliente provisionado"
+            echo "| Campo | Valor |"
+            echo "|-------|-------|"
+            echo "| Slug | \`${{ inputs.slug }}\` |"
+            echo "| Supabase | https://app.supabase.com/project/${{ steps.supabase.outputs.project_id }} |"
+            echo "| Vercel | https://vercel.com/dashboard |"
+            echo "| URL esperada | https://${{ inputs.slug }}.${{ secrets.BASE_DOMAIN }} |"
+            echo ""
+            echo "### Próximos passos manuais"
+            echo "1. Vercel → Settings → Domains → adicionar \`${{ inputs.slug }}.${{ secrets.BASE_DOMAIN }}\`"
+            echo "2. Vercel → Settings → Environment Variables → adicionar \`ANTHROPIC_API_KEY\`, \`WHATSAPP_*\`"
+            echo "3. Meta Developer → WABA → configurar webhook override para a nova URL"
+          } >> "$GITHUB_STEP_SUMMARY"

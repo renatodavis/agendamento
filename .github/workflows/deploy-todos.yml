@@ -1,0 +1,68 @@
+name: Deploy em todos os clientes
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "clients.json"   # commit do próprio workflow não dispara loop
+      - "**.md"
+      - "playbooks/**"
+
+jobs:
+  listar:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.read.outputs.matrix }}
+      tem_clientes: ${{ steps.read.outputs.tem_clientes }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: read
+        run: |
+          # Filtra entradas sem supabase_project_id (cliente ainda não provisionado)
+          MATRIX=$(jq -c '[.[] | select(.supabase_project_id != "" and .vercel_project_id != "")]' clients.json)
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          COUNT=$(echo "$MATRIX" | jq 'length')
+          echo "tem_clientes=$([ "$COUNT" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: listar
+    if: needs.listar.outputs.tem_clientes == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false          # falha em um cliente não cancela os outros
+      matrix:
+        cliente: ${{ fromJson(needs.listar.outputs.matrix) }}
+
+    name: ${{ matrix.cliente.slug }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar Supabase CLI
+        run: |
+          curl -sL https://github.com/supabase/cli/releases/download/v1.200.3/supabase_linux_amd64.tar.gz | tar xz
+          sudo mv supabase /usr/local/bin/supabase
+
+      - name: Aplicar migrações — ${{ matrix.cliente.slug }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase db push --project-ref "${{ matrix.cliente.supabase_project_id }}"
+
+      - name: Re-deploy Vercel — ${{ matrix.cliente.slug }}
+        run: |
+          TEAM_PARAM="${{ secrets.VERCEL_TEAM_ID != '' && format('?teamId={0}', secrets.VERCEL_TEAM_ID) || '' }}"
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"name\": \"agendamento-${{ matrix.cliente.slug }}\",
+              \"project\": \"${{ matrix.cliente.vercel_project_id }}\",
+              \"target\": \"production\",
+              \"gitSource\": {
+                \"type\": \"github\",
+                \"ref\": \"main\",
+                \"repoId\": \"${{ github.repository_id }}\"
+              }
+            }" \
+            "https://api.vercel.com/v13/deployments$TEAM_PARAM"
