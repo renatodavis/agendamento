@@ -5,5 +5,12 @@
     "subdomain": "agendamento",
     "supabase_project_id": "uziwzhgqabkbhrrzrlms",
     "vercel_project_id": "prj_BaNt86NS5oCD4OxEg5FZkayiSZbM"
+  },
+  {
+    "slug": "cliente-teste-2",
+    "name": "Cliente Teste 2",
+    "subdomain": "cliente-teste-2",
+    "supabase_project_id": "umpgtuifegkinbsaitlv",
+    "vercel_project_id": "prj_AMDFNTKePl7Yx1Q5LOUJuTgKMlOH"
   }
 ]
