@@ -1,4 +1,5 @@
 'use client'
+import { useState } from 'react'
 
 export type LogEntry = {
   id: string
@@ -25,10 +26,19 @@ function fmtTs(d: Date) {
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
-export default function LogPanel({ entries, stats }: {
+export default function LogPanel({ entries, stats, onFetch }: {
   entries: LogEntry[]
   stats: { total: number; tokens: number; latency: number; cost: number }
+  onFetch?: () => Promise<void>
 }) {
+  const [loading, setLoading] = useState(false)
+
+  async function handleFetch() {
+    if (!onFetch || loading) return
+    setLoading(true)
+    try { await onFetch() } finally { setLoading(false) }
+  }
+
   return (
     <div className="flex flex-col" style={{
       width: '100%', flex: 1, minHeight: 0,
@@ -40,11 +50,31 @@ export default function LogPanel({ entries, stats }: {
         <span className="font-display text-[11px] font-semibold tracking-[.06em] uppercase" style={{ color: 'var(--muted)' }}>
           Log de Agentes
         </span>
-        <span className="text-[10px] px-1.5 py-0.5 rounded-lg border" style={{
-          background: 'var(--card)', borderColor: 'var(--border)', color: 'var(--muted)'
-        }}>
-          {entries.length}
-        </span>
+        <div className="flex items-center gap-2">
+          {entries.length > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-lg border" style={{
+              background: 'var(--card)', borderColor: 'var(--border)', color: 'var(--muted)'
+            }}>
+              {entries.length}
+            </span>
+          )}
+          {onFetch && (
+            <button
+              onClick={handleFetch}
+              disabled={loading}
+              className="text-[10px] px-2 py-0.5 rounded-lg border font-medium"
+              style={{
+                background: loading ? 'var(--border)' : 'var(--accent)',
+                borderColor: 'var(--accent)',
+                color: loading ? 'var(--muted)' : '#fff',
+                cursor: loading ? 'default' : 'pointer',
+                transition: 'opacity .15s',
+              }}
+            >
+              {loading ? '...' : 'Consultar'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Stats grid */}
@@ -72,7 +102,7 @@ export default function LogPanel({ entries, stats }: {
         {entries.length === 0 && (
           <div className="flex-1 flex items-center justify-center text-center p-4 text-xs leading-relaxed"
             style={{ color: 'var(--muted)' }}>
-            Nenhuma atividade ainda.<br />Envie uma mensagem para ver o pipeline em ação.
+            Clique em <strong>Consultar</strong> para carregar o log de atividades.
           </div>
         )}
         {[...entries].reverse().map(e => {
