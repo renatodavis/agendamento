@@ -23,6 +23,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verificar se slug já existe
+        run: |
+          EXISTS=$(jq -r --arg slug "${{ inputs.slug }}" '.[] | select(.slug == $slug) | .slug' clients.json)
+          if [ -n "$EXISTS" ]; then
+            echo "::error::Cliente com slug '${{ inputs.slug }}' já existe em clients.json. Escolha um slug diferente."
+            exit 1
+          fi
+
       - name: Instalar Supabase CLI
         run: |
           curl -sL https://github.com/supabase/cli/releases/download/v1.200.3/supabase_linux_amd64.tar.gz \
