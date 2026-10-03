@@ -3,8 +3,7 @@
     "slug": "demo",
     "name": "Demo (cliente base)",
     "subdomain": "agendamento",
-    "supabase_project_id": "",
-    "vercel_project_id": "",
-    "_comment": "Preencha supabase_project_id e vercel_project_id com os IDs do projeto existente"
+    "supabase_project_id": "uziwzhgqabkbhrrzrlms",
+    "vercel_project_id": ""
   }
 ]
