@@ -38,25 +38,44 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Instalar Supabase CLI
-        run: |
-          curl -sL https://github.com/supabase/cli/releases/download/v1.200.3/supabase_linux_amd64.tar.gz \
-            | tar xz --overwrite -C /tmp
-          sudo mv /tmp/supabase /usr/local/bin/supabase
-
       - name: Aplicar migrações — ${{ matrix.cliente.slug }}
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORDS: ${{ secrets.SUPABASE_DB_PASSWORDS }}
         run: |
-          SLUG="${{ matrix.cliente.slug }}"
-          DB_PASS=$(echo "$SUPABASE_DB_PASSWORDS" | jq -r --arg s "$SLUG" '.[$s] // empty')
-          if [ -z "$DB_PASS" ]; then
-            echo "::error::Senha não encontrada para '$SLUG' em SUPABASE_DB_PASSWORDS"
-            exit 1
-          fi
-          supabase link --project-ref "${{ matrix.cliente.supabase_project_id }}" --password "$DB_PASS"
-          supabase db push
+          PROJECT_REF="${{ matrix.cliente.supabase_project_id }}"
+          API="https://api.supabase.com/v1/projects/$PROJECT_REF/database/query"
+
+          run_sql() {
+            curl -sf -X POST "$API" \
+              -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data-raw "{\"query\": $(jq -Rs . <<< "$1")}"
+          }
+
+          # Garante que a tabela de controle existe
+          run_sql "CREATE SCHEMA IF NOT EXISTS supabase_migrations;
+                   CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
+                     version text NOT NULL PRIMARY KEY
+                   );"
+
+          # Lê versões já aplicadas
+          APPLIED=$(run_sql "SELECT version FROM supabase_migrations.schema_migrations" \
+            | jq -r '.[].version' 2>/dev/null || true)
+
+          # Aplica cada migration nova, em ordem
+          for f in $(ls supabase/migrations/*.sql 2>/dev/null | sort); do
+            VERSION=$(basename "$f" | grep -oE '^[0-9]+')
+            if echo "$APPLIED" | grep -qx "$VERSION"; then
+              echo "Skipping $VERSION (already applied)"
+              continue
+            fi
+            echo "Applying $VERSION..."
+            run_sql "$(cat "$f")" || { echo "::error::Migration $VERSION falhou"; exit 1; }
+            run_sql "INSERT INTO supabase_migrations.schema_migrations(version)
+                     VALUES ('$VERSION') ON CONFLICT DO NOTHING"
+            echo "Applied $VERSION"
+          done
+          echo "Migrações concluídas"
 
       - name: Re-deploy Vercel — ${{ matrix.cliente.slug }}
         run: |
