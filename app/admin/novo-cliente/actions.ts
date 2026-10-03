@@ -7,8 +7,11 @@ export async function provisionar(slug: string, name: string): Promise<{ ok: tru
   const adminSecret = process.env.ADMIN_SECRET
   const githubPat = process.env.GITHUB_PAT
 
-  if (!adminSecret || !githubPat) {
-    return { ok: false, error: 'Servidor mal configurado' }
+  if (!githubPat) {
+    return { ok: false, error: 'GITHUB_PAT não configurado no servidor' }
+  }
+  if (!adminSecret) {
+    return { ok: false, error: 'ADMIN_SECRET não configurado no servidor' }
   }
 
   if (!slug || !name) {
@@ -37,7 +40,7 @@ export async function provisionar(slug: string, name: string): Promise<{ ok: tru
   if (!response.ok) {
     const text = await response.text()
     console.error('GitHub API error:', response.status, text)
-    return { ok: false, error: 'Falha ao disparar workflow' }
+    return { ok: false, error: `GitHub API ${response.status}: ${text}` }
   }
 
   return { ok: true, slug: slugNormalizado }
