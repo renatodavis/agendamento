@@ -3,7 +3,7 @@
 import { useState } from 'react'
 
 export default function NovoClientePage() {
-  const [form, setForm] = useState({ slug: '', name: '', secret: '' })
+  const [form, setForm] = useState({ slug: '', name: '', token: '' })
   const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
   const [message, setMessage] = useState('')
 
@@ -19,8 +19,11 @@ export default function NovoClientePage() {
     try {
       const res = await fetch('/api/admin/provisionar', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${form.token}`,
+        },
+        body: JSON.stringify({ slug: form.slug, name: form.name }),
       })
       const data = await res.json()
 
@@ -35,7 +38,7 @@ export default function NovoClientePage() {
         `Workflow disparado para "${form.name}" (slug: ${data.slug}). ` +
         `Acompanhe em github.com/renatodavis/agendamento/actions — leva ~10 min.`
       )
-      setForm({ slug: '', name: '', secret: '' })
+      setForm({ slug: '', name: '', token: '' })
     } catch {
       setStatus('error')
       setMessage('Erro de rede')
@@ -91,12 +94,12 @@ export default function NovoClientePage() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Senha admin
+              Token admin
             </label>
             <input
               type="password"
-              value={form.secret}
-              onChange={e => setForm(f => ({ ...f, secret: e.target.value }))}
+              value={form.token}
+              onChange={e => setForm(f => ({ ...f, token: e.target.value }))}
               required
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             />

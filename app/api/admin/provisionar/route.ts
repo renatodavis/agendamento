@@ -11,12 +11,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Servidor mal configurado' }, { status: 500 })
   }
 
-  const body = await req.json()
-  const { slug, name, secret } = body as { slug: string; name: string; secret: string }
+  const authHeader = req.headers.get('authorization') ?? ''
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : ''
 
-  if (secret !== adminSecret) {
+  if (token !== adminSecret) {
     return NextResponse.json({ error: 'Não autorizado' }, { status: 401 })
   }
+
+  const body = await req.json()
+  const { slug, name } = body as { slug: string; name: string }
 
   if (!slug || !name) {
     return NextResponse.json({ error: 'slug e name são obrigatórios' }, { status: 400 })
