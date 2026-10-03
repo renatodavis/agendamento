@@ -148,7 +148,7 @@ jobs:
 
           TEAM_PARAM="${{ secrets.VERCEL_TEAM_ID != '' && format('?teamId={0}', secrets.VERCEL_TEAM_ID) || '' }}"
 
-          curl -sf -X POST \
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d "[
@@ -157,7 +157,14 @@ jobs:
               {\"key\":\"SUPABASE_SERVICE_ROLE_KEY\",\"value\":\"${{ steps.keys.outputs.service_key }}\",\"type\":\"sensitive\",\"target\":[\"production\"]},
               {\"key\":\"NEXT_PUBLIC_APP_URL\",\"value\":\"$APP_URL\",\"type\":\"plain\",\"target\":[\"production\"]}
             ]" \
-            "https://api.vercel.com/v10/projects/${{ steps.vercel.outputs.project_id }}/env$TEAM_PARAM"
+            "https://api.vercel.com/v10/projects/${{ steps.vercel.outputs.project_id }}/env$TEAM_PARAM")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "Vercel env status: $HTTP_CODE"
+          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ]; then
+            echo "::error::Vercel env vars falhou $HTTP_CODE: $BODY"
+            exit 1
+          fi
 
       # ── Registro ────────────────────────────────────────────────────────────
       - name: Atualizar clients.json e commitar
@@ -180,7 +187,7 @@ jobs:
       - name: Disparar primeiro deploy
         run: |
           TEAM_PARAM="${{ secrets.VERCEL_TEAM_ID != '' && format('?teamId={0}', secrets.VERCEL_TEAM_ID) || '' }}"
-          curl -sf -X POST \
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d "{
@@ -193,7 +200,14 @@ jobs:
                 \"repoId\": \"${{ github.repository_id }}\"
               }
             }" \
-            "https://api.vercel.com/v13/deployments$TEAM_PARAM"
+            "https://api.vercel.com/v13/deployments$TEAM_PARAM")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "Deploy status: $HTTP_CODE"
+          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ]; then
+            echo "::error::Deploy falhou $HTTP_CODE: $BODY"
+            exit 1
+          fi
 
       - name: Resumo
         run: |
