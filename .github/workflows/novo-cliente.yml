@@ -12,7 +12,7 @@ on:
       region:
         description: "Região Supabase"
         required: false
-        default: "sa-east-1"
+        default: "us-east-2"
 
 jobs:
   provisionar:
