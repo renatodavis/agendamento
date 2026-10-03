@@ -53,10 +53,10 @@ jobs:
             STATUS=$(supabase projects list --output json \
               | jq -r ".[] | select(.id==\"$PROJECT_ID\") | .status")
             echo "Status [$i/30]: $STATUS"
-            [ "$STATUS" = "ACTIVE_HEALTHY" ] && break
+            if [ "$STATUS" = "ACTIVE_HEALTHY" ]; then break; fi
             sleep 10
           done
-          [ "$STATUS" != "ACTIVE_HEALTHY" ] && { echo "Timeout: projeto não ficou saudável"; exit 1; }
+          if [ "$STATUS" != "ACTIVE_HEALTHY" ]; then echo "Timeout: projeto não ficou saudável"; exit 1; fi
 
       - name: Aplicar migrações
         env:
