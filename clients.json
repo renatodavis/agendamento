@@ -4,6 +4,6 @@
     "name": "Demo (cliente base)",
     "subdomain": "agendamento",
     "supabase_project_id": "uziwzhgqabkbhrrzrlms",
-    "vercel_project_id": ""
+    "vercel_project_id": "prAgendamento"
   }
 ]
