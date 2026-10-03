@@ -74,10 +74,17 @@ jobs:
           API="https://api.supabase.com/v1/projects/$PROJECT_REF/database/query"
 
           run_sql() {
-            curl -sf -X POST "$API" \
+            local RESP HTTP_CODE BODY
+            RESP=$(curl -s -w "\n%{http_code}" -X POST "$API" \
               -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
               -H "Content-Type: application/json" \
-              --data-raw "{\"query\": $(jq -Rs . <<< "$1")}"
+              --data-raw "{\"query\": $(jq -Rs . <<< "$1")}")
+            HTTP_CODE=$(echo "$RESP" | tail -1)
+            BODY=$(echo "$RESP" | head -n -1)
+            if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ]; then
+              echo "::error::SQL falhou HTTP $HTTP_CODE: $BODY"
+              return 1
+            fi
           }
 
           run_sql "CREATE SCHEMA IF NOT EXISTS supabase_migrations;
