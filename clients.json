@@ -1,0 +1,9 @@
+[
+  {
+    "slug": "demo",
+    "name": "Demo (cliente base)",
+    "subdomain": "agendamento",
+    "supabase_project_id": "uziwzhgqabkbhrrzrlms",
+    "vercel_project_id": "prj_BaNt86NS5oCD4OxEg5FZkayiSZbM"
+  }
+]
