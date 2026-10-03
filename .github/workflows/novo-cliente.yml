@@ -114,7 +114,8 @@ jobs:
       - name: Criar projeto Vercel
         id: vercel
         run: |
-          RESPONSE=$(curl -sf -X POST \
+          TEAM_PARAM="${{ secrets.VERCEL_TEAM_ID != '' && format('?teamId={0}', secrets.VERCEL_TEAM_ID) || '' }}"
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d "{
@@ -125,9 +126,19 @@ jobs:
                 \"repo\": \"${{ github.repository }}\"
               }
             }" \
-            "https://api.vercel.com/v10/projects${{ secrets.VERCEL_TEAM_ID != '' && format('?teamId={0}', secrets.VERCEL_TEAM_ID) || '' }}")
+            "https://api.vercel.com/v10/projects${TEAM_PARAM}")
 
-          PROJECT_ID=$(echo "$RESPONSE" | jq -r '.id')
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          echo "Vercel API status: $HTTP_CODE"
+          echo "Vercel API response: $BODY"
+
+          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ]; then
+            echo "::error::Vercel API retornou $HTTP_CODE: $BODY"
+            exit 1
+          fi
+
+          PROJECT_ID=$(echo "$BODY" | jq -r '.id')
           echo "project_id=$PROJECT_ID" >> "$GITHUB_OUTPUT"
 
       - name: Configurar variáveis de ambiente no Vercel
