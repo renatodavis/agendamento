@@ -6,7 +6,9 @@ import { provisionar } from './actions'
 export default function NovoClientePage() {
   const [form, setForm] = useState({ slug: '', name: '' })
   const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
-  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [sentSlug, setSentSlug] = useState('')
+  const [sentName, setSentName] = useState('')
 
   function toSlug(value: string) {
     return value.toLowerCase().replace(/[^a-z0-9-]/g, '-')
@@ -15,22 +17,66 @@ export default function NovoClientePage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setStatus('loading')
-    setMessage('')
+    setError('')
 
     const result = await provisionar(form.slug, form.name)
 
     if (!result.ok) {
       setStatus('error')
-      setMessage(result.error)
+      setError(result.error)
       return
     }
 
+    setSentSlug(result.slug)
+    setSentName(form.name)
     setStatus('ok')
-    setMessage(
-      `Workflow disparado para "${form.name}" (slug: ${result.slug}). ` +
-      `Acompanhe em github.com/renatodavis/agendamento/actions — leva ~10 min.`
+  }
+
+  if (status === 'ok') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow p-8 space-y-6 text-center">
+          <div className="flex justify-center">
+            <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center">
+              <svg className="w-7 h-7 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-gray-900">Workflow disparado!</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              Provisionamento de <span className="font-medium text-gray-700">{sentName}</span> iniciado.
+            </p>
+          </div>
+          <div className="bg-gray-50 rounded-lg px-4 py-3 text-left space-y-1">
+            <p className="text-xs text-gray-500">Slug</p>
+            <p className="text-sm font-mono text-gray-800">{sentSlug}</p>
+          </div>
+          <p className="text-xs text-gray-400">
+            Acompanhe em{' '}
+            <a
+              href="https://github.com/renatodavis/agendamento/actions"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-green-600 hover:underline"
+            >
+              github.com/renatodavis/agendamento/actions
+            </a>
+            {' '}— leva ~10 min.
+          </p>
+          <button
+            onClick={() => {
+              setStatus('idle')
+              setForm({ slug: '', name: '' })
+            }}
+            className="w-full border border-gray-300 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+          >
+            Provisionar outro cliente
+          </button>
+        </div>
+      </div>
     )
-    setForm({ slug: '', name: '' })
   }
 
   return (
@@ -89,13 +135,9 @@ export default function NovoClientePage() {
           </button>
         </form>
 
-        {message && (
-          <div className={`rounded-lg px-4 py-3 text-sm ${
-            status === 'ok'
-              ? 'bg-green-50 text-green-800 border border-green-200'
-              : 'bg-red-50 text-red-800 border border-red-200'
-          }`}>
-            {message}
+        {error && (
+          <div className="rounded-lg px-4 py-3 text-sm bg-red-50 text-red-800 border border-red-200">
+            {error}
           </div>
         )}
       </div>
