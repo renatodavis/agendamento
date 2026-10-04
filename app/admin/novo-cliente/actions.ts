@@ -3,7 +3,7 @@
 const GITHUB_REPO = 'renatodavis/agendamento'
 const WORKFLOW_FILE = 'novo-cliente.yml'
 
-export async function provisionar(slug: string, name: string): Promise<{ ok: true; slug: string } | { ok: false; error: string }> {
+export async function provisionar(slug: string, name: string, adminEmail?: string): Promise<{ ok: true; slug: string } | { ok: false; error: string }> {
   const adminSecret = process.env.ADMIN_SECRET
   const githubPat = process.env.GITHUB_PAT
 
@@ -20,6 +20,9 @@ export async function provisionar(slug: string, name: string): Promise<{ ok: tru
 
   const slugNormalizado = slug.toLowerCase().replace(/[^a-z0-9-]/g, '-')
 
+  const inputs: Record<string, string> = { slug: slugNormalizado, name }
+  if (adminEmail?.trim()) inputs.admin_email = adminEmail.trim()
+
   const response = await fetch(
     `https://api.github.com/repos/${GITHUB_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`,
     {
@@ -32,7 +35,7 @@ export async function provisionar(slug: string, name: string): Promise<{ ok: tru
       },
       body: JSON.stringify({
         ref: 'main',
-        inputs: { slug: slugNormalizado, name },
+        inputs,
       }),
     }
   )
