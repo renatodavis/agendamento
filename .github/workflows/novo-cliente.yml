@@ -134,13 +134,30 @@ jobs:
           echo "service_key=$SERVICE" >> "$GITHUB_OUTPUT"
 
       # ── Usuário admin inicial ────────────────────────────────────────────────
-      - name: Criar usuário admin
+      - name: Configurar site_url do projeto Supabase
+        if: ${{ inputs.admin_email != '' }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          APP_URL="https://${{ inputs.slug }}.${{ secrets.BASE_DOMAIN }}"
+          RESP=$(curl -s -w "\n%{http_code}" -X PATCH \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"site_url\": \"$APP_URL\"}" \
+            "https://api.supabase.com/v1/projects/${{ steps.supabase.outputs.project_id }}/config/auth")
+          HTTP_CODE=$(echo "$RESP" | tail -1)
+          BODY=$(echo "$RESP" | head -n -1)
+          echo "Auth config status: $HTTP_CODE"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::Falha ao configurar site_url HTTP $HTTP_CODE: $BODY"
+            exit 1
+          fi
+          echo "site_url configurado: $APP_URL"
+
+      - name: Convidar usuário admin
         id: admin
         if: ${{ inputs.admin_email != '' }}
         run: |
-          TEMP_PASSWORD=$(openssl rand -base64 16 | tr -d '/+=' | cut -c1-16)
-          echo "::add-mask::$TEMP_PASSWORD"
-
           SERVICE_KEY="${{ steps.keys.outputs.service_key }}"
           PROJECT_REF="${{ steps.supabase.outputs.project_id }}"
 
@@ -148,23 +165,17 @@ jobs:
             -H "Authorization: Bearer $SERVICE_KEY" \
             -H "apikey: $SERVICE_KEY" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"email\": \"${{ inputs.admin_email }}\",
-              \"password\": \"$TEMP_PASSWORD\",
-              \"email_confirm\": true
-            }" \
-            "https://$PROJECT_REF.supabase.co/auth/v1/admin/users")
+            -d "{\"email\": \"${{ inputs.admin_email }}\"}" \
+            "https://$PROJECT_REF.supabase.co/auth/v1/admin/invite")
 
           HTTP_CODE=$(echo "$RESP" | tail -1)
           BODY=$(echo "$RESP" | head -n -1)
-          echo "Create user status: $HTTP_CODE"
+          echo "Invite status: $HTTP_CODE"
           if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ]; then
-            echo "::error::Falha ao criar usuário admin HTTP $HTTP_CODE: $BODY"
+            echo "::error::Falha ao convidar usuário admin HTTP $HTTP_CODE: $BODY"
             exit 1
           fi
-
-          echo "temp_password=$TEMP_PASSWORD" >> "$GITHUB_OUTPUT"
-          echo "Usuário admin criado: ${{ inputs.admin_email }}"
+          echo "Convite enviado para: ${{ inputs.admin_email }}"
 
       # ── Vercel ──────────────────────────────────────────────────────────────
       - name: Criar projeto Vercel
@@ -284,12 +295,12 @@ jobs:
             echo "4. Meta Developer → WABA → configurar webhook override para a nova URL"
             if [ -n "${{ inputs.admin_email }}" ]; then
               echo ""
-              echo "### 🔑 Acesso admin inicial"
+              echo "### 📧 Convite admin enviado"
               echo "| Campo | Valor |"
               echo "|-------|-------|"
               echo "| E-mail | \`${{ inputs.admin_email }}\` |"
-              echo "| Senha temporária | \`${{ steps.admin.outputs.temp_password }}\` |"
+              echo "| URL do app | https://${{ inputs.slug }}.${{ secrets.BASE_DOMAIN }} |"
               echo ""
-              echo "> ⚠️ Troque a senha no primeiro acesso."
+              echo "> O usuário receberá um e-mail com link para definir a senha e acessar o sistema."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
