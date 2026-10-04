@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { provisionar } from './actions'
 
 export default function NovoClientePage() {
-  const [form, setForm] = useState({ slug: '', name: '' })
+  const [form, setForm] = useState({ slug: '', name: '', adminEmail: '' })
   const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
   const [error, setError] = useState('')
   const [sentSlug, setSentSlug] = useState('')
@@ -19,7 +19,7 @@ export default function NovoClientePage() {
     setStatus('loading')
     setError('')
 
-    const result = await provisionar(form.slug, form.name)
+    const result = await provisionar(form.slug, form.name, form.adminEmail)
 
     if (!result.ok) {
       setStatus('error')
@@ -30,6 +30,7 @@ export default function NovoClientePage() {
     setSentSlug(result.slug)
     setSentName(form.name)
     setStatus('ok')
+    setForm({ slug: '', name: '', adminEmail: '' })
   }
 
   if (status === 'ok') {
@@ -66,10 +67,7 @@ export default function NovoClientePage() {
             {' '}— leva ~10 min.
           </p>
           <button
-            onClick={() => {
-              setStatus('idle')
-              setForm({ slug: '', name: '' })
-            }}
+            onClick={() => setStatus('idle')}
             className="w-full border border-gray-300 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
           >
             Provisionar outro cliente
@@ -123,6 +121,19 @@ export default function NovoClientePage() {
               required
               pattern="[-a-z0-9]+"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-green-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              E-mail admin <span className="text-gray-400 font-normal">(opcional — cria usuário inicial)</span>
+            </label>
+            <input
+              type="email"
+              placeholder="admin@clinica.com"
+              value={form.adminEmail}
+              onChange={e => setForm(f => ({ ...f, adminEmail: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             />
           </div>
 
