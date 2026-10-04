@@ -1,22 +1,20 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { useClinicName } from '@/lib/useClinicName'
 
-export default function LoginPage() {
+function LoginPageInner() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const clinicName = useClinicName()
 
   const [mode, setMode] = useState<'login' | 'set-password'>('login')
-  const [inviteToken, setInviteToken] = useState('')
 
-  const [email, setEmail]       = useState('')
-  const [password, setPassword] = useState('')
-  const [confirmPassword, setConfirmPassword] = useState('')
-  const [error, setError]       = useState<string | null>(null)
-  const [loading, setLoading]   = useState(false)
+  const [email, setEmail]           = useState('')
+  const [password, setPassword]     = useState('')
+  const [confirmPassword, setConfirm] = useState('')
+  const [error, setError]           = useState<string | null>(null)
+  const [loading, setLoading]       = useState(false)
 
   const sb = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -24,26 +22,14 @@ export default function LoginPage() {
   )
 
   useEffect(() => {
-    // Supabase invite links arrive as hash fragments: #access_token=...&type=invite
-    // or as query params: ?token=...&type=invite (older GoTrue versions)
-    const hash = typeof window !== 'undefined' ? window.location.hash : ''
-    const hashParams = new URLSearchParams(hash.replace(/^#/, ''))
-
-    const tokenFromHash  = hashParams.get('access_token')
-    const typeFromHash   = hashParams.get('type')
-    const tokenFromQuery = searchParams.get('token')
-    const typeFromQuery  = searchParams.get('type')
-
-    if (typeFromHash === 'invite' && tokenFromHash) {
-      // Modern Supabase: token already exchanged — session is set automatically
-      // by the @supabase/ssr listener; we just need to let the user set a password
-      setInviteToken(tokenFromHash)
-      setMode('set-password')
-    } else if (typeFromQuery === 'invite' && tokenFromQuery) {
-      setInviteToken(tokenFromQuery)
+    // Supabase invite links redirect back with a hash fragment:
+    //   #access_token=...&type=invite&...
+    const hash = window.location.hash
+    const params = new URLSearchParams(hash.replace(/^#/, ''))
+    if (params.get('type') === 'invite' && params.get('access_token')) {
       setMode('set-password')
     }
-  }, [searchParams])
+  }, [])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -74,23 +60,8 @@ export default function LoginPage() {
 
     setLoading(true)
 
-    // If arrived via hash fragment, Supabase already set the session.
-    // If arrived via query param (OTP), exchange the token first.
-    const hash = typeof window !== 'undefined' ? window.location.hash : ''
-    const typeFromHash = new URLSearchParams(hash.replace(/^#/, '')).get('type')
-
-    if (typeFromHash !== 'invite') {
-      const { error: otpError } = await sb.auth.verifyOtp({
-        token_hash: inviteToken,
-        type: 'invite',
-      })
-      if (otpError) {
-        setError('Link de convite inválido ou expirado. Solicite um novo convite.')
-        setLoading(false)
-        return
-      }
-    }
-
+    // The hash fragment already established a session via Supabase's PKCE flow.
+    // Just update the password.
     const { error: updateError } = await sb.auth.updateUser({ password })
     if (updateError) {
       setError('Erro ao definir senha: ' + updateError.message)
@@ -116,6 +87,21 @@ export default function LoginPage() {
     boxShadow: '0 4px 24px rgba(15,25,35,.08)',
   }
 
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '10px 12px', borderRadius: 8,
+    border: '1px solid var(--border, #E2E7EF)',
+    background: 'var(--background, #F4F6F9)',
+    fontSize: 13, outline: 'none',
+    color: 'var(--foreground, #0F1923)',
+    boxSizing: 'border-box',
+  }
+
+  const labelStyle: React.CSSProperties = {
+    display: 'block', fontSize: 11, fontWeight: 600,
+    color: 'var(--muted, #6B7A90)', textTransform: 'uppercase',
+    letterSpacing: '.06em', marginBottom: 6,
+  }
+
   const logoSection = (
     <div style={{ textAlign: 'center', marginBottom: 28 }}>
       <div style={{
@@ -132,21 +118,6 @@ export default function LoginPage() {
       </div>
     </div>
   )
-
-  const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '10px 12px', borderRadius: 8,
-    border: '1px solid var(--border, #E2E7EF)',
-    background: 'var(--background, #F4F6F9)',
-    fontSize: 13, outline: 'none',
-    color: 'var(--foreground, #0F1923)',
-    boxSizing: 'border-box',
-  }
-
-  const labelStyle: React.CSSProperties = {
-    display: 'block', fontSize: 11, fontWeight: 600,
-    color: 'var(--muted, #6B7A90)', textTransform: 'uppercase',
-    letterSpacing: '.06em', marginBottom: 6,
-  }
 
   if (mode === 'set-password') {
     return (
@@ -173,7 +144,7 @@ export default function LoginPage() {
               <label style={labelStyle}>Confirmar senha</label>
               <input
                 type="password" required autoComplete="new-password" minLength={8}
-                value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+                value={confirmPassword} onChange={e => setConfirm(e.target.value)}
                 placeholder="Repita a senha"
                 style={inputStyle}
               />
@@ -212,7 +183,6 @@ export default function LoginPage() {
         {logoSection}
 
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-
           <div>
             <label style={labelStyle}>E-mail</label>
             <input
@@ -257,5 +227,13 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginPageInner />
+    </Suspense>
   )
 }
