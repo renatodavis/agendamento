@@ -12,5 +12,12 @@
     "subdomain": "cliente-teste-2",
     "supabase_project_id": "umpgtuifegkinbsaitlv",
     "vercel_project_id": "prj_AMDFNTKePl7Yx1Q5LOUJuTgKMlOH"
+  },
+  {
+    "slug": "clinica-teste",
+    "name": "clinica-teste",
+    "subdomain": "clinica-teste",
+    "supabase_project_id": "wjsvblituitrsmrowqwj",
+    "vercel_project_id": "prj_N6ydejRcborxNjDvG78OPdD8c3at"
   }
 ]
