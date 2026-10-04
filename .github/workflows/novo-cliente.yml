@@ -233,6 +233,25 @@ jobs:
             exit 1
           fi
 
+      # ── Domínio ─────────────────────────────────────────────────────────────
+      - name: Adicionar subdomínio na Vercel
+        run: |
+          SUBDOMAIN="${{ inputs.slug }}.${{ secrets.BASE_DOMAIN }}"
+          TEAM_PARAM="${{ secrets.VERCEL_TEAM_ID != '' && format('?teamId={0}', secrets.VERCEL_TEAM_ID) || '' }}"
+          RESP=$(curl -s -w "\n%{http_code}" -X POST \
+            -H "Authorization: Bearer ${{ secrets.VERCEL_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"name\": \"$SUBDOMAIN\"}" \
+            "https://api.vercel.com/v10/projects/${{ steps.vercel.outputs.project_id }}/domains${TEAM_PARAM}")
+          HTTP_CODE=$(echo "$RESP" | tail -1)
+          BODY=$(echo "$RESP" | head -n -1)
+          echo "Domain status: $HTTP_CODE — $BODY"
+          if [ "$HTTP_CODE" != "200" ] && [ "$HTTP_CODE" != "201" ]; then
+            echo "::warning::Falha ao adicionar domínio HTTP $HTTP_CODE: $BODY"
+          else
+            echo "Subdomínio configurado: $SUBDOMAIN"
+          fi
+
       # ── Registro ────────────────────────────────────────────────────────────
       - name: Atualizar clients.json e commitar
         run: |
@@ -290,9 +309,8 @@ jobs:
             echo "### Próximos passos manuais"
             echo "1. **GitHub** → Settings → Secrets → \`SUPABASE_DB_PASSWORDS\` → adicionar entrada \`\"${{ inputs.slug }}\": \"<senha>\"\`"
             echo "   - Senha disponível em: Supabase Dashboard → projeto → Settings → Database"
-            echo "2. Vercel → Settings → Domains → adicionar \`${{ inputs.slug }}.${{ secrets.BASE_DOMAIN }}\`"
-            echo "3. Vercel → Settings → Environment Variables → adicionar \`ANTHROPIC_API_KEY\`, \`WHATSAPP_*\`"
-            echo "4. Meta Developer → WABA → configurar webhook override para a nova URL"
+            echo "2. Vercel → Settings → Environment Variables → adicionar \`ANTHROPIC_API_KEY\`, \`WHATSAPP_*\`"
+            echo "3. Meta Developer → WABA → configurar webhook override para a nova URL"
             if [ -n "${{ inputs.admin_email }}" ]; then
               echo ""
               echo "### 📧 Convite admin enviado"
