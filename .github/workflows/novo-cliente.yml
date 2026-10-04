@@ -166,7 +166,7 @@ jobs:
             -H "apikey: $SERVICE_KEY" \
             -H "Content-Type: application/json" \
             -d "{\"email\": \"${{ inputs.admin_email }}\"}" \
-            "https://$PROJECT_REF.supabase.co/auth/v1/admin/invite")
+            "https://$PROJECT_REF.supabase.co/auth/v1/invite")
 
           HTTP_CODE=$(echo "$RESP" | tail -1)
           BODY=$(echo "$RESP" | head -n -1)
