@@ -19,5 +19,12 @@
     "subdomain": "clinica-teste",
     "supabase_project_id": "wjsvblituitrsmrowqwj",
     "vercel_project_id": "prj_N6ydejRcborxNjDvG78OPdD8c3at"
+  },
+  {
+    "slug": "teste-fluxo-completo",
+    "name": "Teste Fluxo Completo",
+    "subdomain": "teste-fluxo-completo",
+    "supabase_project_id": "npihedvtpqfdgaxtspur",
+    "vercel_project_id": "prj_KuU3Cs99oxygcK0xibe2R0EqnrJ1"
   }
 ]
