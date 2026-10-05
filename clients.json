@@ -26,5 +26,12 @@
     "subdomain": "teste-fluxo-completo",
     "supabase_project_id": "npihedvtpqfdgaxtspur",
     "vercel_project_id": "prj_KuU3Cs99oxygcK0xibe2R0EqnrJ1"
+  },
+  {
+    "slug": "exemplo",
+    "name": "exemplo",
+    "subdomain": "exemplo",
+    "supabase_project_id": "cldvdfljnrssralmwbkk",
+    "vercel_project_id": "prj_cRKuA4ioeRKFtx572lBmRaJwSDKJ"
   }
 ]
