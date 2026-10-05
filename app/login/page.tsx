@@ -1,35 +1,29 @@
 'use client'
 import { useState, useEffect, Suspense } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useClinicName } from '@/lib/useClinicName'
 
 function LoginPageInner() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const clinicName = useClinicName()
 
-  const [mode, setMode] = useState<'login' | 'set-password'>('login')
+  const setup = searchParams.get('setup') === 'true'
+  const callbackError = searchParams.get('error') === 'callback'
 
-  const [email, setEmail]           = useState('')
-  const [password, setPassword]     = useState('')
+  const [email, setEmail]             = useState('')
+  const [password, setPassword]       = useState('')
   const [confirmPassword, setConfirm] = useState('')
-  const [error, setError]           = useState<string | null>(null)
-  const [loading, setLoading]       = useState(false)
+  const [error, setError]             = useState<string | null>(
+    callbackError ? 'Link de convite inválido ou expirado. Solicite um novo convite.' : null
+  )
+  const [loading, setLoading] = useState(false)
 
   const sb = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
-
-  useEffect(() => {
-    // Supabase invite links redirect back with a hash fragment:
-    //   #access_token=...&type=invite&...
-    const hash = window.location.hash
-    const params = new URLSearchParams(hash.replace(/^#/, ''))
-    if (params.get('type') === 'invite' && params.get('access_token')) {
-      setMode('set-password')
-    }
-  }, [])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -60,8 +54,7 @@ function LoginPageInner() {
 
     setLoading(true)
 
-    // The hash fragment already established a session via Supabase's PKCE flow.
-    // Just update the password.
+    // A sessão já foi estabelecida pelo /auth/callback via PKCE
     const { error: updateError } = await sb.auth.updateUser({ password })
     if (updateError) {
       setError('Erro ao definir senha: ' + updateError.message)
@@ -114,12 +107,12 @@ function LoginPageInner() {
         {clinicName}
       </div>
       <div style={{ fontSize: 11, marginTop: 4, color: 'var(--muted, #6B7A90)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
-        {mode === 'set-password' ? 'Definir senha de acesso' : 'Acesso restrito · Recepção'}
+        {setup ? 'Definir senha de acesso' : 'Acesso restrito · Recepção'}
       </div>
     </div>
   )
 
-  if (mode === 'set-password') {
+  if (setup) {
     return (
       <div style={containerStyle}>
         <div style={cardStyle}>
