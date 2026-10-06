@@ -33,5 +33,12 @@
     "subdomain": "exemplo",
     "supabase_project_id": "cldvdfljnrssralmwbkk",
     "vercel_project_id": "prj_cRKuA4ioeRKFtx572lBmRaJwSDKJ"
+  },
+  {
+    "slug": "novo",
+    "name": "Novo",
+    "subdomain": "novo",
+    "supabase_project_id": "hjglpffoyecnxufvrzdd",
+    "vercel_project_id": "prj_eIscNLF5A3e7fhywQ5uXA5C88qQ5"
   }
 ]
