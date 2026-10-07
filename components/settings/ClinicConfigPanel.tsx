@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { useVocabulary } from '@/lib/useActiveProfile'
+import WhatsAppConfigPanel from './WhatsAppConfigPanel'
 
 type Service = { name: string; description: string }
 
@@ -166,7 +167,7 @@ export default function ClinicConfigPanel() {
           Mensagem para Atendimento Fora do Escopo
         </div>
         <p className="text-[9px]" style={{ color: 'var(--muted)' }}>
-          Use <code className="px-1 rounded" style={{ background: 'var(--panel)' }}>{'{clinic_name}'}</code> e <code className="px-1 rounded" style={{ background: 'var(--panel)' }}>{'{services_list}'}</code> como variáveis.
+          Use <code className="px-1 rounded" style={{ background: 'var(--panel)' }}>{'{'+'clinic_name}'}</code> e <code className="px-1 rounded" style={{ background: 'var(--panel)' }}>{'{'+'services_list}'}</code> como variáveis.
         </p>
         <textarea
           rows={5}
@@ -199,6 +200,12 @@ export default function ClinicConfigPanel() {
         }}>
         {saving ? 'Salvando…' : saved ? '✓ Salvo com sucesso!' : 'Salvar Configurações'}
       </button>
+
+      {/* Divider */}
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 4, marginTop: 4 }} />
+
+      {/* WhatsApp Business */}
+      <WhatsAppConfigPanel />
     </div>
   )
 }

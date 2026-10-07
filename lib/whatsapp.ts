@@ -1,13 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-
-const WA_TOKEN    = process.env.WHATSAPP_API_TOKEN
-const WA_PHONE_ID = process.env.WHATSAPP_PHONE_NUMBER_ID
+import { getWhatsAppConfig } from './whatsapp-config'
 
 export async function sendWhatsAppText(phone: string, body: string): Promise<{ ok: boolean; id?: string }> {
-  if (!WA_TOKEN || !WA_PHONE_ID) return { ok: false }
-  const res = await fetch(`https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`, {
+  const { apiToken, phoneNumberId } = await getWhatsAppConfig()
+  if (!apiToken || !phoneNumberId) return { ok: false }
+  const res = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${apiToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ messaging_product: 'whatsapp', to: phone, type: 'text', text: { body } }),
   })
   if (!res.ok) {
@@ -26,10 +25,11 @@ export async function sendWhatsAppTemplate(
   language: string,
   params: string[],
 ): Promise<{ ok: boolean; id?: string }> {
-  if (!WA_TOKEN || !WA_PHONE_ID) return { ok: false }
-  const res = await fetch(`https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`, {
+  const { apiToken, phoneNumberId } = await getWhatsAppConfig()
+  if (!apiToken || !phoneNumberId) return { ok: false }
+  const res = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${apiToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       messaging_product: 'whatsapp', to: phone, type: 'template',
       template: {

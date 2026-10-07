@@ -6,13 +6,11 @@ import { getClinicBasicConfig, isHealthBusiness } from '@/lib/clinic-config-serv
 import { maybeCreateApprovalIntercept } from '@/lib/approval-intercept'
 import { resolvePendingReply } from '@/lib/pending-action'
 import { sendWhatsAppText, sendAndLog } from '@/lib/whatsapp'
+import { getWhatsAppConfig } from '@/lib/whatsapp-config'
 
 // Meta WhatsApp Business Cloud API webhook
 // Docs: https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks
 
-const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN
-const APP_SECRET   = process.env.WHATSAPP_APP_SECRET
-const WA_TOKEN     = process.env.WHATSAPP_API_TOKEN
 const GROQ_API_KEY = process.env.GROQ_API_KEY
 
 const RATE_LIMIT_MAX = 10
@@ -27,11 +25,11 @@ type InboundMessage = {
 }
 
 // ── Transcrição de áudio (mensagens de voz) via Groq Whisper ──────────
-async function transcribeAudio(mediaId: string): Promise<string | null> {
-  if (!WA_TOKEN || !GROQ_API_KEY) return null
+async function transcribeAudio(mediaId: string, waToken: string): Promise<string | null> {
+  if (!GROQ_API_KEY) return null
   try {
     const metaRes = await fetch(`https://graph.facebook.com/v19.0/${mediaId}`, {
-      headers: { Authorization: `Bearer ${WA_TOKEN}` },
+      headers: { Authorization: `Bearer ${waToken}` },
     })
     if (!metaRes.ok) {
       console.error('[whatsapp] falha ao resolver media:', metaRes.status)
@@ -40,7 +38,7 @@ async function transcribeAudio(mediaId: string): Promise<string | null> {
     const meta = await metaRes.json() as { url?: string; mime_type?: string }
     if (!meta.url) return null
 
-    const audioRes = await fetch(meta.url, { headers: { Authorization: `Bearer ${WA_TOKEN}` } })
+    const audioRes = await fetch(meta.url, { headers: { Authorization: `Bearer ${waToken}` } })
     if (!audioRes.ok) {
       console.error('[whatsapp] falha ao baixar áudio:', audioRes.status)
       return null
@@ -71,9 +69,8 @@ async function transcribeAudio(mediaId: string): Promise<string | null> {
 }
 
 // ── Valida assinatura X-Hub-Signature-256 ─────────────────────────────
-// Sem APP_SECRET, só aceita fora de produção (desenvolvimento local).
-function verifySignature(rawBody: string, signature: string | null): boolean {
-  if (!APP_SECRET) {
+function verifySignature(rawBody: string, signature: string | null, appSecret: string | undefined): boolean {
+  if (!appSecret) {
     if (process.env.NODE_ENV === 'production') {
       console.error('[whatsapp] WHATSAPP_APP_SECRET não configurado — webhook recusado')
       return false
@@ -81,7 +78,7 @@ function verifySignature(rawBody: string, signature: string | null): boolean {
     return true
   }
   if (!signature) return false
-  const expected = 'sha256=' + createHmac('sha256', APP_SECRET).update(rawBody).digest('hex')
+  const expected = 'sha256=' + createHmac('sha256', appSecret).update(rawBody).digest('hex')
   try {
     return timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
   } catch {
@@ -91,12 +88,13 @@ function verifySignature(rawBody: string, signature: string | null): boolean {
 
 // ── GET: Meta webhook verification handshake ─────────────────────────
 export async function GET(req: NextRequest) {
-  if (!VERIFY_TOKEN) {
+  const { verifyToken } = await getWhatsAppConfig()
+  if (!verifyToken) {
     console.error('[whatsapp/GET] WHATSAPP_VERIFY_TOKEN não configurado')
     return new Response('Forbidden', { status: 403 })
   }
   const { searchParams } = new URL(req.url)
-  if (searchParams.get('hub.mode') === 'subscribe' && searchParams.get('hub.verify_token') === VERIFY_TOKEN) {
+  if (searchParams.get('hub.mode') === 'subscribe' && searchParams.get('hub.verify_token') === verifyToken) {
     return new Response(searchParams.get('hub.challenge'), { status: 200 })
   }
   return new Response('Forbidden', { status: 403 })
@@ -106,7 +104,9 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text()
-    if (!verifySignature(rawBody, req.headers.get('x-hub-signature-256'))) {
+    const { appSecret } = await getWhatsAppConfig()
+
+    if (!verifySignature(rawBody, req.headers.get('x-hub-signature-256'), appSecret)) {
       console.warn('[whatsapp/POST] assinatura X-Hub-Signature-256 inválida')
       return new Response('Unauthorized', { status: 401 })
     }
@@ -149,7 +149,8 @@ async function handleInbound(message: InboundMessage, contactName: string | null
   let text = message.text?.body ?? ''
 
   if (message.type === 'audio' && message.audio?.id) {
-    const transcript = await transcribeAudio(message.audio.id)
+    const { apiToken } = await getWhatsAppConfig()
+    const transcript = apiToken ? await transcribeAudio(message.audio.id, apiToken) : null
     if (!transcript) {
       await sendWhatsAppText(phone, 'Desculpe, não consegui entender o áudio. Pode escrever sua mensagem, por favor? 🙏')
       return
