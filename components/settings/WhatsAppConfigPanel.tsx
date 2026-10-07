@@ -51,7 +51,6 @@ export default function WhatsAppConfigPanel() {
 
   useEffect(() => { load() }, [load])
 
-  // Carrega FB SDK se META_APP_ID estiver configurado
   useEffect(() => {
     if (!META_APP_ID || typeof window === 'undefined') return
     if (document.getElementById('facebook-jssdk')) return
@@ -266,7 +265,10 @@ export default function WhatsAppConfigPanel() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--panel)' }}>
           <div>
             <label style={labelStyle}>Phone Number ID</label>
-            <input style={inputStyle} placeholder="123456789012345"
+            <input
+              style={inputStyle}
+              placeholder="123456789012345"
+              autoComplete="off"
               value={form.whatsapp_phone_number_id}
               onChange={e => setForm(p => ({ ...p, whatsapp_phone_number_id: e.target.value }))} />
             <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 3 }}>
@@ -281,6 +283,7 @@ export default function WhatsAppConfigPanel() {
                 type={showToken ? 'text' : 'password'}
                 style={{ ...inputStyle, paddingRight: 32 }}
                 placeholder="EAAT…"
+                autoComplete="new-password"
                 value={form.whatsapp_api_token}
                 onChange={e => setForm(p => ({ ...p, whatsapp_api_token: e.target.value }))} />
               <button onClick={() => setShowToken(v => !v)}
@@ -292,7 +295,10 @@ export default function WhatsAppConfigPanel() {
 
           <div>
             <label style={labelStyle}>Verify Token (webhook)</label>
-            <input style={inputStyle} placeholder="token-aleatorio-seguro"
+            <input
+              style={inputStyle}
+              placeholder="token-aleatorio-seguro"
+              autoComplete="off"
               value={form.whatsapp_verify_token}
               onChange={e => setForm(p => ({ ...p, whatsapp_verify_token: e.target.value }))} />
             <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 3 }}>
@@ -307,6 +313,7 @@ export default function WhatsAppConfigPanel() {
                 type={showSecret ? 'text' : 'password'}
                 style={{ ...inputStyle, paddingRight: 32 }}
                 placeholder="App Secret do Facebook App"
+                autoComplete="new-password"
                 value={form.whatsapp_app_secret}
                 onChange={e => setForm(p => ({ ...p, whatsapp_app_secret: e.target.value }))} />
               <button onClick={() => setShowSecret(v => !v)}
