@@ -5,40 +5,5 @@
     "subdomain": "agendamento",
     "supabase_project_id": "uziwzhgqabkbhrrzrlms",
     "vercel_project_id": "prj_BaNt86NS5oCD4OxEg5FZkayiSZbM"
-  },
-  {
-    "slug": "cliente-teste-2",
-    "name": "Cliente Teste 2",
-    "subdomain": "cliente-teste-2",
-    "supabase_project_id": "umpgtuifegkinbsaitlv",
-    "vercel_project_id": "prj_AMDFNTKePl7Yx1Q5LOUJuTgKMlOH"
-  },
-  {
-    "slug": "clinica-teste",
-    "name": "clinica-teste",
-    "subdomain": "clinica-teste",
-    "supabase_project_id": "wjsvblituitrsmrowqwj",
-    "vercel_project_id": "prj_N6ydejRcborxNjDvG78OPdD8c3at"
-  },
-  {
-    "slug": "teste-fluxo-completo",
-    "name": "Teste Fluxo Completo",
-    "subdomain": "teste-fluxo-completo",
-    "supabase_project_id": "npihedvtpqfdgaxtspur",
-    "vercel_project_id": "prj_KuU3Cs99oxygcK0xibe2R0EqnrJ1"
-  },
-  {
-    "slug": "exemplo",
-    "name": "exemplo",
-    "subdomain": "exemplo",
-    "supabase_project_id": "cldvdfljnrssralmwbkk",
-    "vercel_project_id": "prj_cRKuA4ioeRKFtx572lBmRaJwSDKJ"
-  },
-  {
-    "slug": "novo2",
-    "name": "novo2",
-    "subdomain": "novo2",
-    "supabase_project_id": "kxqoxfqboodrhsyzxuli",
-    "vercel_project_id": "prj_QOMNrRoGfO6pXPcZ1ZfnRdi2amuZ"
   }
 ]
