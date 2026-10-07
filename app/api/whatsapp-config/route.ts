@@ -55,14 +55,11 @@ export async function PUT(req: NextRequest) {
   const entries = Object.entries(body)
     .filter(([key, value]) => SECRET_KEYS.includes(key as SecretKey) && typeof value === 'string' && value.trim().length > 0)
 
-  if (entries.length > 0) {
-    await Promise.all(
-      entries.map(([key, value]) =>
-        db.from('clinic_secrets').upsert({ key, value: (value as string).trim() }, { onConflict: 'key' })
-      )
-    )
-    invalidateWhatsAppConfigCache()
+  for (const [key, value] of entries) {
+    await db.from('clinic_secrets').upsert({ key, value: (value as string).trim() }, { onConflict: 'key' })
   }
+
+  if (entries.length > 0) invalidateWhatsAppConfigCache()
 
   return NextResponse.json({ ok: true })
 }
@@ -103,17 +100,12 @@ export async function POST(req: NextRequest) {
   if (!access_token) return NextResponse.json({ error: 'Token não retornado' }, { status: 502 })
 
   const db = createServerClient()
-  const updates: Promise<unknown>[] = [
-    db.from('clinic_secrets').upsert({ key: 'whatsapp_api_token', value: access_token }, { onConflict: 'key' }),
-  ]
+  await db.from('clinic_secrets').upsert({ key: 'whatsapp_api_token', value: access_token }, { onConflict: 'key' })
 
   if (phone_number_id) {
-    updates.push(
-      db.from('clinic_secrets').upsert({ key: 'whatsapp_phone_number_id', value: phone_number_id }, { onConflict: 'key' })
-    )
+    await db.from('clinic_secrets').upsert({ key: 'whatsapp_phone_number_id', value: phone_number_id }, { onConflict: 'key' })
   }
 
-  await Promise.all(updates)
   invalidateWhatsAppConfigCache()
 
   return NextResponse.json({ ok: true, phone_number_id, waba_id })
