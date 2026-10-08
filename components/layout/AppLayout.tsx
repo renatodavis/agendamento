@@ -9,7 +9,7 @@ import { useApprovalCount } from '@/components/agenda/ApprovalPanel'
 import { useClinicName } from '@/lib/useClinicName'
 import ProfilesPanel from '@/components/profiles/ProfilesPanel'
 import { useActiveProfile } from '@/lib/useActiveProfile'
-import { MessageCircle, CalendarDays, ChartColumn, Settings, SlidersHorizontal, PanelRight, LogOut, ChevronRight, Bot, CircleCheck, CalendarClock, Users } from 'lucide-react'
+import { MessageCircle, CalendarDays, ChartColumn, Settings, SlidersHorizontal, PanelRight, LogOut, ChevronRight, Bot, CircleCheck, CalendarClock, Users, Webhook } from 'lucide-react'
 
 type MobileTab = 'wa' | 'agenda' | 'metrics' | 'config'
 
@@ -198,6 +198,7 @@ export default function AppLayout() {
               { id: 'contacts',  Icon: Users,         label: 'Contatos',  badge: 0 },
               { id: 'schedules', Icon: CalendarClock, label: 'Horários',  badge: 0 },
               { id: 'config',    Icon: Settings,      label: 'Config',    badge: 0 },
+              { id: 'whatsapp',  Icon: Webhook,       label: 'Meta',      badge: 0 },
             ] as { id: AgendaSection; Icon: React.ElementType; label: string; badge: number }[]).map(tab => (
               <button key={tab.id}
                 onClick={() => setAgendaSection(tab.id)}

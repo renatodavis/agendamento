@@ -5,6 +5,7 @@ import type { Appointment, AppointmentStatus, Doctor } from '@/types'
 import ApprovalPanel from './ApprovalPanel'
 import ClinicConfigPanel from '@/components/settings/ClinicConfigPanel'
 import DoctorSchedulesPanel from '@/components/settings/DoctorSchedulesPanel'
+import WhatsAppConfigPanel from '@/components/settings/WhatsAppConfigPanel'
 import ContactsPanel from '@/components/contacts/ContactsPanel'
 import AgendaQueueView from './AgendaQueueView'
 import { useActiveProfile, profileHasConvenio, patientFallbackEmoji, vocabularyOf, type Vocabulary } from '@/lib/useActiveProfile'
@@ -257,7 +258,7 @@ function ApptDetail({ appt, showConvenio, onAttend, onCancel, detailRef }: {
 }
 
 // ── Main ──────────────────────────────────────────────────────────────
-export type AgendaSection = 'agenda' | 'approvals' | 'config' | 'schedules' | 'contacts'
+export type AgendaSection = 'agenda' | 'approvals' | 'config' | 'schedules' | 'contacts' | 'whatsapp'
 
 export default function AgendaBottomPanel({ view: panelView }: { view: AgendaSection }) {
   const [agendaView, setAgendaView]     = useState<'list' | 'queue'>('list')
@@ -355,6 +356,13 @@ export default function AgendaBottomPanel({ view: panelView }: { view: AgendaSec
       {panelView === 'config' && (
         <div className="flex-1 min-h-0 overflow-y-auto">
           <ClinicConfigPanel />
+        </div>
+      )}
+
+      {/* ── WhatsApp / Meta panel ── */}
+      {panelView === 'whatsapp' && (
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <WhatsAppConfigPanel />
         </div>
       )}
 
