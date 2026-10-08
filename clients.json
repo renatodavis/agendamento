@@ -5,5 +5,12 @@
     "subdomain": "agendamento",
     "supabase_project_id": "uziwzhgqabkbhrrzrlms",
     "vercel_project_id": "prj_BaNt86NS5oCD4OxEg5FZkayiSZbM"
+  },
+  {
+    "slug": "info",
+    "name": "info",
+    "subdomain": "info",
+    "supabase_project_id": "ysauwgjfedqpifomixqu",
+    "vercel_project_id": "prj_aGsiWrlhgmrkOJP62Zd4hlWyL8lq"
   }
 ]
