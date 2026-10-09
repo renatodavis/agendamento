@@ -11,7 +11,7 @@ import { useActiveProfile } from '@/lib/useActiveProfile'
 import {
   CalendarDays, MessageCircle, Users, Briefcase,
   BarChart2, Settings, LogOut, Bot, Plus, TrendingUp,
-  SlidersHorizontal,
+  SlidersHorizontal, Sun, Moon,
 } from 'lucide-react'
 
 type SidebarSection = 'agenda' | 'conversas' | 'clientes' | 'profissionais' | 'metricas' | 'ajustes'
@@ -30,6 +30,25 @@ export default function AppLayout() {
   const approvalCount               = useApprovalCount()
   const activeProfile               = useActiveProfile()
   const router                      = useRouter()
+  const [theme, setTheme]           = useState<'system' | 'light' | 'dark'>('system')
+
+  useEffect(() => {
+    try { const t = localStorage.getItem('aa-theme') as typeof theme | null; if (t) setTheme(t) } catch { /* */ }
+  }, [])
+
+  function toggleTheme() {
+    const next = theme === 'dark' ? 'light' : 'dark'
+    setTheme(next)
+    try { localStorage.setItem('aa-theme', next) } catch { /* */ }
+    const root = document.documentElement
+    if (next === 'dark')  { root.setAttribute('data-theme', 'dark')  }
+    else                  { root.setAttribute('data-theme', 'light') }
+  }
+
+  useEffect(() => {
+    if (theme === 'system') { document.documentElement.removeAttribute('data-theme') }
+    else { document.documentElement.setAttribute('data-theme', theme) }
+  }, [theme])
 
   const sb = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -189,6 +208,9 @@ export default function AppLayout() {
           <div className="aa-sidebar-actions">
             <button className="aa-sidebar-btn" onClick={() => setProfilesOpen(true)} title="Perfis">
               <SlidersHorizontal size={15} />
+            </button>
+            <button className="aa-sidebar-btn" onClick={toggleTheme} title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}>
+              {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
             </button>
             <button className="aa-sidebar-btn" onClick={handleLogout} title="Sair">
               <LogOut size={15} />

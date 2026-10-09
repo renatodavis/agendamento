@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Bricolage_Grotesque, DM_Sans, Outfit } from 'next/font/google'
+import { Bricolage_Grotesque, Figtree, DM_Mono } from 'next/font/google'
 import { getClinicBasicConfig } from '@/lib/clinic-config-server'
 import './globals.css'
 
@@ -9,16 +9,15 @@ const bricolage = Bricolage_Grotesque({
   axes: ['opsz'],
 })
 
-const dmSans = DM_Sans({
-  variable: '--font-dm-sans',
+const figtree = Figtree({
+  variable: '--font-figtree',
   subsets: ['latin'],
-  axes: ['opsz'],
 })
 
-const outfit = Outfit({
-  variable: '--font-outfit',
+const dmMono = DM_Mono({
+  variable: '--font-dm-mono',
   subsets: ['latin'],
-  weight: ['600', '700', '800'],
+  weight: ['400', '500'],
 })
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -32,7 +31,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={`${bricolage.variable} ${dmSans.variable} ${outfit.variable} h-full`}>
+    <html lang="pt-BR" className={`${bricolage.variable} ${figtree.variable} ${dmMono.variable} h-full`}>
       <body className="h-full font-sans antialiased bg-background text-foreground">
         {children}
       </body>
