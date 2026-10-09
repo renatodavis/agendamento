@@ -130,8 +130,8 @@ export default function AppLayout() {
           <div style={{
             width: 34, height: 34, borderRadius: 10,
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0,
-            background: 'linear-gradient(135deg, var(--green) 0%, #0A7A5E 100%)',
-            boxShadow: '0 2px 6px rgba(13,158,119,.35)',
+            background: 'linear-gradient(135deg, var(--accent) 0%, #1aae53 100%)',
+            boxShadow: '0 2px 8px rgba(37,211,102,.3)',
           }}>{activeProfile?.vocabulary?.emoji ?? '🏥'}</div>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.1, letterSpacing: '-.01em', color: 'var(--foreground)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>

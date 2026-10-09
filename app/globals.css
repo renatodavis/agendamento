@@ -1,24 +1,25 @@
 @import "tailwindcss";
 
 :root {
-  --background: #EFF4FA;
-  --foreground: #0D1A28;
+  /* AgendaAgentic — light mode */
+  --background: #F0F4FA;
+  --foreground: #0F1629;
   --panel: #FFFFFF;
-  --card: #F4F8FD;
-  --border: #D8E4F0;
-  --muted: #627A94;
-  --green: #0D9E77;
+  --card: #F5F8FD;
+  --border: #DDE4F0;
+  --muted: #5A6680;
+  --green: #1aae53;
   --gold: #C07900;
   --blue: #1A6FCC;
   --purple: #6D3DBF;
   --red: #DC3545;
-  --accent: #1A6FCC;
+  --accent: #25D366;
 
   /* WhatsApp chat colors */
-  --chat-bg:  #E6F2ED;
-  --chat-in:  #C9E8CB;
+  --chat-bg:  #E6F9EE;
+  --chat-in:  #C9EED7;
   --chat-out: #FFFFFF;
-  --chat-text:#0D1B2A;
+  --chat-text:#0F1629;
 
   /* shadows */
   --shadow-sm: 0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.04);
@@ -27,46 +28,47 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --background: #060E1A;
-    --foreground: #D8E8F5;
-    --panel: #0B1826;
-    --card: #101F33;
-    --border: #1C3350;
-    --muted: #4A6378;
-    --green: #14C38E;
+    /* AgendaAgentic — dark mode */
+    --background: #080D18;
+    --foreground: #DDE8FF;
+    --panel: #0F1829;
+    --card: #141E30;
+    --border: #1B2540;
+    --muted: #7B8FB5;
+    --green: #25D366;
     --gold: #F0A500;
     --blue: #3B9EFF;
     --purple: #A78BFA;
     --red: #F87171;
-    --accent: #3B9EFF;
-    --chat-bg:  #0A1825;
-    --chat-in:  #0F2D1E;
-    --chat-out: #101F33;
-    --chat-text:#D8E8F5;
-    --shadow-sm: 0 1px 3px rgba(0,0,0,.3);
-    --shadow-md: 0 4px 12px rgba(0,0,0,.4);
+    --accent: #25D366;
+    --chat-bg:  #0D2920;
+    --chat-in:  #0D2920;
+    --chat-out: #141E30;
+    --chat-text:#DDE8FF;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,.4);
+    --shadow-md: 0 4px 16px rgba(0,0,0,.5);
   }
 }
 
 :root[data-theme="dark"] {
-  --background: #060E1A;
-  --foreground: #D8E8F5;
-  --panel: #0B1826;
-  --card: #101F33;
-  --border: #1C3350;
-  --muted: #4A6378;
-  --green: #14C38E;
+  --background: #080D18;
+  --foreground: #DDE8FF;
+  --panel: #0F1829;
+  --card: #141E30;
+  --border: #1B2540;
+  --muted: #7B8FB5;
+  --green: #25D366;
   --gold: #F0A500;
   --blue: #3B9EFF;
   --purple: #A78BFA;
   --red: #F87171;
-  --accent: #3B9EFF;
-  --chat-bg:  #0A1825;
-  --chat-in:  #0F2D1E;
-  --chat-out: #101F33;
-  --chat-text:#D8E8F5;
-  --shadow-sm: 0 1px 3px rgba(0,0,0,.3);
-  --shadow-md: 0 4px 12px rgba(0,0,0,.4);
+  --accent: #25D366;
+  --chat-bg:  #0D2920;
+  --chat-in:  #0D2920;
+  --chat-out: #141E30;
+  --chat-text:#DDE8FF;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.4);
+  --shadow-md: 0 4px 16px rgba(0,0,0,.5);
 }
 
 @theme inline {
@@ -76,6 +78,7 @@
   --color-card: var(--card);
   --color-border: var(--border);
   --color-muted: var(--muted);
+  --color-accent: var(--accent);
   --color-green: var(--green);
   --color-gold: var(--gold);
   --color-blue: var(--blue);
