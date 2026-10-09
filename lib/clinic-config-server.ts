@@ -41,7 +41,7 @@ export async function getClinicBasicConfig(): Promise<ClinicBasicConfig> {
   const businessNameFromProfile = profileVoc.business_name
   const clinicName = (businessNameFromProfile && businessNameFromProfile.trim())
     ? businessNameFromProfile.trim()
-    : (typeof cfg.clinic_name === 'string' ? cfg.clinic_name : 'Clínica São Lucas')
+    : (typeof cfg.clinic_name === 'string' ? cfg.clinic_name : 'AgendaAgentic')
 
   const result: ClinicBasicConfig = {
     clinicName,

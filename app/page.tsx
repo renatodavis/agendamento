@@ -357,7 +357,7 @@ export default function LandingPage() {
                 <div className="aa-topbar">
                   <div className="aa-avatar">🏥</div>
                   <div>
-                    <div className="aa-pname">Assistente da Clínica</div>
+                    <div className="aa-pname">Assistente de Agendamento</div>
                     <div className="aa-pstatus">online agora</div>
                   </div>
                 </div>

@@ -445,7 +445,7 @@ async function loadClinicConfig(db: SupabaseClient) {
   const businessNameFromProfile = profile?.vocabulary?.business_name
   const clinicName = businessNameFromProfile?.trim()
     ? businessNameFromProfile.trim()
-    : (typeof cfg.clinic_name === 'string' ? cfg.clinic_name : 'Clínica São Lucas')
+    : (typeof cfg.clinic_name === 'string' ? cfg.clinic_name : 'AgendaAgentic')
 
   return {
     clinicName,

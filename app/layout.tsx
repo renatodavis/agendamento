@@ -23,8 +23,9 @@ const outfit = Outfit({
 
 export async function generateMetadata(): Promise<Metadata> {
   const { clinicName } = await getClinicBasicConfig()
+  const isDefaultName = !clinicName || clinicName === 'AgendaAgentic'
   return {
-    title: clinicName,
+    title: isDefaultName ? 'AgendaAgentic' : `${clinicName} · AgendaAgentic`,
     description: 'Sistema de agendamento inteligente via WhatsApp com IA',
   }
 }

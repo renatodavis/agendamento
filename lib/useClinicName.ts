@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 
 let cached: string | null = null
 
-export function useClinicName(fallback = 'Clínica São Lucas') {
+export function useClinicName(fallback = 'AgendaAgentic') {
   const [name, setName] = useState<string>(cached ?? fallback)
 
   useEffect(() => {
