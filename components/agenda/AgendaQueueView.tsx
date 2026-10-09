@@ -1,5 +1,5 @@
 'use client'
-import { useMemo } from 'react'
+import { useMemo, type CSSProperties } from 'react'
 import type { Appointment, AppointmentStatus } from '@/types'
 import { useActiveProfile, profileHasConvenio, patientFallbackEmoji } from '@/lib/useActiveProfile'
 import { ClipboardList, Check, X, Hourglass } from 'lucide-react'
@@ -35,140 +35,48 @@ function AppointmentCard({ appt, isNext, showConvenio, onAttend, onSelect, selec
   const isAttended = appt.status === 'atendida'
   const isCancelled = appt.status === 'cancelada'
 
+  const vars = { '--c': sc.color, '--bg': isAttended ? `${sc.bg}99` : sc.bg } as CSSProperties
+  const state = [selected && 'is-selected', isNext && 'is-next', isCancelled && 'is-cancelled'].filter(Boolean).join(' ')
+
   return (
-    <div
-      onClick={() => onSelect(appt)}
-      style={{
-        width: 168,
-        height: 214,
-        flexShrink: 0,
-        borderRadius: 14,
-        border: `2px solid ${selected ? sc.color : isNext ? sc.color : `${sc.color}55`}`,
-        background: selected ? sc.bg : isAttended ? `${sc.bg}99` : sc.bg,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        cursor: 'pointer',
-        transition: 'box-shadow .15s, border-color .15s',
-        boxShadow: selected
-          ? `0 0 0 3px ${sc.color}30, var(--shadow-md)`
-          : isNext
-          ? `0 0 0 2px ${sc.color}25, var(--shadow-md)`
-          : 'var(--shadow-sm)',
-        opacity: isCancelled ? 0.55 : 1,
-        position: 'relative',
-      }}>
+    <div className={`aa-qcard ${state}`} style={vars} onClick={() => onSelect(appt)}>
 
-      {/* "Próximo" badge */}
-      {isNext && (
-        <div style={{
-          position: 'absolute', top: 6, right: 6,
-          fontSize: 8, fontWeight: 800, letterSpacing: '.06em',
-          padding: '2px 6px', borderRadius: 20,
-          background: sc.color, color: '#fff',
-          animation: 'next-pulse 2s ease-in-out infinite',
-        }}>
-          PRÓXIMO
-        </div>
-      )}
-
-      {/* Time + status */}
-      <div style={{ padding: '12px 12px 8px', borderBottom: `1px solid ${sc.color}30` }}>
-        <div style={{
-          fontSize: 26, fontWeight: 800, lineHeight: 1, letterSpacing: '-.02em',
-          color: sc.color, fontVariantNumeric: 'tabular-nums',
-        }}>
-          {fmtTime(appt.scheduled_at)}
-        </div>
-        <div style={{
-          marginTop: 4, display: 'flex', alignItems: 'center', gap: 4,
-          fontSize: 9, fontWeight: 700, letterSpacing: '.07em', color: sc.color,
-        }}>
-          <span>{sc.icon}</span> {sc.label}
-        </div>
+      <div className="aa-qcard-time">
+        <div className="aa-qcard-hour">{fmtTime(appt.scheduled_at)}</div>
+        <div className="aa-qcard-status"><span>{sc.icon}</span> {sc.label}</div>
+        {isNext && <div className="aa-qcard-badge">PRÓXIMO</div>}
       </div>
 
-      {/* Patient */}
-      <div style={{ padding: '10px 12px', flex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 6 }}>
-          <span style={{ fontSize: 22, lineHeight: 1 }}>{appt.patient?.photo_emoji ?? patientFallback}</span>
+      <div className="aa-qcard-patient">
+        <div className="aa-qcard-who">
+          <span className="aa-qcard-emoji">{appt.patient?.photo_emoji ?? patientFallback}</span>
           <div style={{ minWidth: 0 }}>
-            <div style={{
-              fontSize: 12, fontWeight: 700, lineHeight: 1.2,
-              color: 'var(--foreground)', whiteSpace: 'nowrap',
-              overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>
-              {appt.patient?.name ?? '—'}
-            </div>
-            <div style={{ fontSize: 9, color: 'var(--muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div className="aa-qcard-name">{appt.patient?.name ?? '—'}</div>
+            <div className="aa-qcard-sub">
               {appt.doctor?.name}
-            </div>
-            <div style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {appt.doctor?.specialty}
+              <span className="aa-qcard-spec">{appt.doctor?.specialty}</span>
             </div>
           </div>
         </div>
 
-        {/* Tags: convenio + type */}
-        <div style={{ display: 'flex', gap: 3, overflow: 'hidden' }}>
+        <div className="aa-qcard-tags">
           {showConvenio && appt.patient?.convenio && (
-            <span style={{
-              fontSize: 8, fontWeight: 600, padding: '2px 6px',
-              borderRadius: 20, border: `1px solid ${sc.color}60`,
-              color: sc.color, background: `${sc.color}12`,
-              whiteSpace: 'nowrap', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>
-              {appt.patient.convenio}
-            </span>
+            <span className="aa-qcard-tag accent">{appt.patient.convenio}</span>
           )}
-          {appt.type && (
-            <span style={{
-              fontSize: 8, fontWeight: 600, padding: '2px 6px',
-              borderRadius: 20, border: '1px solid var(--border)',
-              color: 'var(--muted)', background: 'var(--card)',
-              whiteSpace: 'nowrap',
-            }}>
-              {appt.type}
-            </span>
-          )}
+          {appt.type && <span className="aa-qcard-tag">{appt.type}</span>}
         </div>
       </div>
 
-      {/* Action button */}
-      <div style={{ padding: '8px 10px 10px' }}>
+      <div className="aa-qcard-action">
         {isAttended ? (
-          <div style={{
-            width: '100%', padding: '7px 0', borderRadius: 8,
-            background: `${sc.color}20`, border: `1px solid ${sc.color}50`,
-            fontSize: 11, fontWeight: 700, color: sc.color,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-          }}>
-            <Check size={13} /> Atendido
-          </div>
+          <div className="aa-qcard-btn soft"><Check size={14} /> Atendido</div>
         ) : isCancelled ? (
-          <div style={{
-            width: '100%', padding: '7px 0', borderRadius: 8,
-            background: '#EF444412', border: '1px solid #EF444440',
-            fontSize: 11, fontWeight: 700, color: '#EF4444',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-          }}>
-            <X size={13} /> Cancelado
-          </div>
+          <div className="aa-qcard-btn danger"><X size={14} /> Cancelado</div>
         ) : (
-          <button
-            onClick={e => { e.stopPropagation(); onAttend(appt.id) }}
-            style={{
-              width: '100%', padding: '7px 0', borderRadius: 8,
-              background: sc.color, border: 'none',
-              fontSize: 11, fontWeight: 700, color: '#fff',
-              cursor: 'pointer', transition: 'opacity .12s',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-            }}
-            onMouseEnter={e => (e.currentTarget.style.opacity = '.85')}
-            onMouseLeave={e => (e.currentTarget.style.opacity = '1')}>
+          <button className="aa-qcard-btn solid" onClick={e => { e.stopPropagation(); onAttend(appt.id) }}>
             {canAttend && appt.status === 'lista_espera'
-              ? <><Hourglass size={13} /> Promover</>
-              : <><Check size={13} /> Marcar atendido</>}
+              ? <><Hourglass size={14} /> Promover</>
+              : <><Check size={14} /> Marcar atendido</>}
           </button>
         )}
       </div>
@@ -200,17 +108,7 @@ export default function AgendaQueueView({ appointments, loading, onAttend, selec
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
       {/* Cards scroll area */}
-      <div style={{
-        flex: 1,
-        overflowX: 'auto',
-        overflowY: 'hidden',
-        padding: '16px 20px',
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 12,
-        scrollbarWidth: 'thin',
-        scrollbarColor: 'var(--border) transparent',
-      }}>
+      <div className="aa-queue">
         {loading ? (
           <div style={{
             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -250,6 +148,82 @@ export default function AgendaQueueView({ appointments, loading, onAttend, selec
       </div>
 
       <style>{`
+        .aa-queue {
+          flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden;
+          padding: 16px 20px; display: flex; align-items: flex-start; gap: 12px;
+          scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+        }
+        .aa-qcard {
+          position: relative; flex-shrink: 0; width: 168px; height: 214px;
+          display: flex; flex-direction: column; overflow: hidden; cursor: pointer;
+          border-radius: 14px; border: 2px solid color-mix(in srgb, var(--c) 35%, transparent);
+          background: var(--bg); box-shadow: var(--shadow-sm);
+          transition: box-shadow .15s, border-color .15s;
+        }
+        .aa-qcard.is-next { border-color: var(--c); box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 15%, transparent), var(--shadow-pop); }
+        .aa-qcard.is-selected { border-color: var(--c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 20%, transparent), var(--shadow-pop); }
+        .aa-qcard.is-cancelled { opacity: .55; }
+
+        .aa-qcard-time { padding: 12px 12px 8px; border-bottom: 1px solid color-mix(in srgb, var(--c) 20%, transparent); }
+        .aa-qcard-hour { font-size: 26px; font-weight: 800; line-height: 1; letter-spacing: -.02em; color: var(--c); font-variant-numeric: tabular-nums; }
+        .aa-qcard-status { margin-top: 4px; display: flex; align-items: center; gap: 4px; font-size: 9px; font-weight: 700; letter-spacing: .07em; color: var(--c); }
+        .aa-qcard-badge {
+          position: absolute; top: 6px; right: 6px;
+          font-size: 8px; font-weight: 800; letter-spacing: .06em;
+          padding: 2px 6px; border-radius: 20px; background: var(--c); color: #fff;
+          animation: next-pulse 2s ease-in-out infinite;
+        }
+
+        .aa-qcard-patient { padding: 10px 12px; flex: 1; min-width: 0; }
+        .aa-qcard-who { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
+        .aa-qcard-emoji { font-size: 22px; line-height: 1; }
+        .aa-qcard-name { font-size: 12px; font-weight: 700; line-height: 1.2; color: #111817; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .aa-qcard-sub { font-size: 9px; color: #55605e; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; flex-direction: column; }
+        .aa-qcard-spec { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+        .aa-qcard-tags { display: flex; gap: 4px; overflow: hidden; }
+        .aa-qcard-tag {
+          font-size: 8px; font-weight: 600; padding: 2px 6px; border-radius: 20px; white-space: nowrap;
+          border: 1px solid #dcd9d1; color: #55605e; background: #ffffffaa;
+          max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+        }
+        .aa-qcard-tag.accent { border-color: color-mix(in srgb, var(--c) 40%, transparent); color: var(--c); background: color-mix(in srgb, var(--c) 8%, transparent); max-width: 90px; }
+
+        .aa-qcard-action { padding: 8px 10px 10px; }
+        .aa-qcard-btn {
+          width: 100%; padding: 7px 0; border-radius: 8px; border: none;
+          font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 4px;
+        }
+        .aa-qcard-btn.solid { background: var(--c); color: #fff; cursor: pointer; transition: opacity .12s; }
+        .aa-qcard-btn.solid:hover { opacity: .85; }
+        .aa-qcard-btn.soft { background: color-mix(in srgb, var(--c) 12%, transparent); border: 1px solid color-mix(in srgb, var(--c) 30%, transparent); color: var(--c); }
+        .aa-qcard-btn.danger { background: #EF444412; border: 1px solid #EF444440; color: #EF4444; }
+
+        @media (max-width: 767px) {
+          .aa-queue { flex-direction: column; align-items: stretch; overflow-x: hidden; overflow-y: auto; padding: 12px 16px 16px; gap: 10px; }
+          .aa-qcard {
+            width: 100%; height: auto;
+            display: grid; grid-template-columns: 92px minmax(0, 1fr);
+            grid-template-areas: "time patient" "time action";
+          }
+          .aa-qcard-time {
+            grid-area: time; padding: 14px 12px; border-bottom: none;
+            border-right: 1px solid color-mix(in srgb, var(--c) 20%, transparent);
+            display: flex; flex-direction: column; gap: 6px;
+          }
+          .aa-qcard-hour { font-size: 24px; }
+          .aa-qcard-status { margin-top: 0; font-size: 10px; }
+          .aa-qcard-badge { position: static; align-self: flex-start; font-size: 9px; padding: 3px 8px; }
+          .aa-qcard-patient { grid-area: patient; padding: 12px 14px 6px; }
+          .aa-qcard-who { gap: 10px; margin-bottom: 8px; }
+          .aa-qcard-emoji { font-size: 26px; }
+          .aa-qcard-name { font-size: 15px; }
+          .aa-qcard-sub { font-size: 12px; margin-top: 3px; }
+          .aa-qcard-tags { flex-wrap: wrap; gap: 6px; }
+          .aa-qcard-tag, .aa-qcard-tag.accent { font-size: 11px; padding: 3px 9px; max-width: 100%; }
+          .aa-qcard-action { grid-area: action; padding: 6px 14px 14px; }
+          .aa-qcard-btn { padding: 10px 0; font-size: 13px; border-radius: 10px; }
+        }
+
         @keyframes spin { to { transform: rotate(360deg) } }
         @keyframes next-pulse {
           0%,100% { opacity: 1; transform: scale(1) }

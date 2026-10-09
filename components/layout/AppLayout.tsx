@@ -148,7 +148,7 @@ export default function AppLayout() {
     { id: 'ajustes',       Icon: Settings,      label: 'Ajustes' },
   ]
 
-  const mobileTabs = ['agenda', 'conversas', 'metricas'] as const
+  const mobileTabs = ['agenda', 'conversas'] as const
   const activeMobileTab = mobileLive ? 'aovivo'
     : (mobileTabs as readonly string[]).includes(section) ? section : 'mais'
 
@@ -253,32 +253,34 @@ export default function AppLayout() {
                   </h1>
                 </div>
                 <div className="aa-stats-actions">
-                  <button className="aa-btn-ghost">Semana</button>
-                  <button className="aa-btn-primary" onClick={() => setNovoAgendamentoOpen(true)}>
-                    <Plus size={14} strokeWidth={2.5} /> Novo agendamento
+                  <button className="aa-btn-ghost aa-hide-mobile">Semana</button>
+                  <button className="aa-btn-primary" onClick={() => setNovoAgendamentoOpen(true)} aria-label="Novo agendamento">
+                    <Plus size={14} strokeWidth={2.5} />
+                    <span className="aa-hide-mobile">Novo agendamento</span>
+                    <span className="aa-show-mobile">Novo</span>
                   </button>
                 </div>
               </div>
 
               <div className="aa-kpis">
                 <div className="aa-kpi">
-                  <div className="aa-kpi-label">Agendados pelo assistente hoje</div>
+                  <div className="aa-kpi-label">Pelo assistente</div>
                   <div className="aa-kpi-value">{apptStats.assistantToday}</div>
-                  {apptStats.assistantToday > 0 && (
-                    <div className="aa-kpi-trend up">
-                      <TrendingUp size={12} /> confirmados pelo WhatsApp
-                    </div>
-                  )}
-                </div>
-                <div className="aa-kpi">
-                  <div className="aa-kpi-label">Comparecimento (7 dias)</div>
-                  <div className="aa-kpi-value">
-                    {attendanceRate !== null ? `${attendanceRate}%` : '—'}
+                  <div className="aa-kpi-hint">
+                    {apptStats.assistantToday > 0 && <TrendingUp size={11} />} hoje, via WhatsApp
                   </div>
                 </div>
                 <div className="aa-kpi">
-                  <div className="aa-kpi-label">Faltas (7 dias)</div>
+                  <div className="aa-kpi-label">Comparecimento</div>
+                  <div className="aa-kpi-value">
+                    {attendanceRate !== null ? `${attendanceRate}%` : '—'}
+                  </div>
+                  <div className="aa-kpi-hint">últimos 7 dias</div>
+                </div>
+                <div className="aa-kpi">
+                  <div className="aa-kpi-label">Faltas</div>
                   <div className="aa-kpi-value">{apptStats.missedWeek}</div>
+                  <div className="aa-kpi-hint">últimos 7 dias</div>
                 </div>
               </div>
             </div>
@@ -325,7 +327,6 @@ export default function AppLayout() {
           { id: 'agenda',    Icon: CalendarDays,  label: 'Agenda',    onClick: () => goToSection('agenda') },
           { id: 'aovivo',    Icon: Bot,           label: 'Ao vivo',   onClick: () => { setMobileLive(true); setMoreOpen(false) } },
           { id: 'conversas', Icon: MessageCircle, label: 'Conversas', onClick: () => goToSection('conversas'), badge: approvalCount },
-          { id: 'metricas',  Icon: BarChart2,     label: 'Métricas',  onClick: () => goToSection('metricas') },
           { id: 'mais',      Icon: Menu,          label: 'Mais',      onClick: () => setMoreOpen(true) },
         ]).map(tab => (
           <button key={tab.id}
@@ -348,6 +349,7 @@ export default function AppLayout() {
           <div className="aa-sheet safe-bottom" onClick={e => e.stopPropagation()}>
             <div className="aa-sheet-handle" />
             {([
+              { id: 'metricas',      Icon: BarChart2, label: 'Métricas' },
               { id: 'clientes',      Icon: Users,     label: 'Clientes' },
               { id: 'profissionais', Icon: Briefcase, label: 'Profissionais' },
               { id: 'ajustes',       Icon: Settings,  label: 'Ajustes' },
@@ -521,12 +523,12 @@ export default function AppLayout() {
           font-size: 20px; font-weight: 800; color: var(--foreground);
           letter-spacing: -.02em; font-variant-numeric: tabular-nums;
         }
-        .aa-kpi-trend {
-          font-size: 10px; font-weight: 600; display: flex; align-items: center; gap: 3px;
-          margin-top: 2px;
+        .aa-kpi-hint {
+          font-size: 10px; color: var(--muted); display: flex; align-items: center; gap: 3px;
+          margin-top: 2px; white-space: nowrap;
         }
-        .aa-kpi-trend.up { color: var(--accent); }
-        .aa-kpi-trend.down { color: var(--red); }
+        .aa-kpi-hint svg { color: var(--accent); }
+        .aa-show-mobile { display: none; }
 
         /* Section content */
         .aa-section-content {
@@ -621,8 +623,18 @@ export default function AppLayout() {
           .aa-mobile-nav { display: flex; }
           .aa-layout.mobile-live .aa-main { display: none; }
           .aa-layout.mobile-live .aa-wa-panel { display: flex; width: 100%; border-left: none; }
+          .aa-hide-mobile { display: none; }
+          .aa-show-mobile { display: inline; }
           .aa-stats-header { padding: 12px 16px 0; }
+          .aa-stats-top { flex-wrap: nowrap; align-items: center; gap: 12px; margin-bottom: 10px; }
           .aa-hero-stat { font-size: 18px; }
+          .aa-btn-primary { height: 36px; padding: 0 14px; font-size: 13px; }
+          .aa-kpis { margin: 0 -16px; border-top: 1px solid var(--border); }
+          .aa-kpi { padding: 8px 12px 10px; min-width: 0; }
+          .aa-kpi:first-child { padding-left: 16px; }
+          .aa-kpi-label { font-size: 9px; letter-spacing: .04em; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .aa-kpi-value { font-size: 18px; line-height: 1.15; }
+          .aa-kpi-hint { font-size: 9px; overflow: hidden; text-overflow: ellipsis; }
         }
       `}</style>
     </div>
