@@ -219,9 +219,14 @@ async function consultarDisponibilidade(
     const fmtDate = (d: Date) => d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'UTC' })
     const fmtTime = (d: Date) => d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
     const allSlots: { doctor: typeof matchingDoctors[0]; slot: Date }[] = []
-    const tomorrow = new Date(); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1); tomorrow.setUTCHours(0, 0, 0, 0)
-    const prefDate = input.preferred_date ? new Date(input.preferred_date + 'T00:00:00Z') : tomorrow
-    const startDate = prefDate >= tomorrow ? prefDate : tomorrow
+    const now = new Date()
+    // Mínimo: 1 hora a partir de agora — slots antes disso são descartados
+    const minSlotTime = new Date(now.getTime() + 60 * 60 * 1000)
+    const todayUTC = new Date(now); todayUTC.setUTCHours(0, 0, 0, 0)
+    const tomorrow = new Date(todayUTC); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1)
+    const prefDate = input.preferred_date ? new Date(input.preferred_date + 'T00:00:00Z') : todayUTC
+    // Permite hoje; datas passadas retrocedem para hoje
+    const startDate = prefDate >= todayUTC ? prefDate : todayUTC
     const specificDateRequested = !!input.preferred_date
     const dayLoopEnd = new Date(startDate)
     dayLoopEnd.setUTCDate(dayLoopEnd.getUTCDate() + (specificDateRequested ? 0 : 14))
@@ -275,7 +280,7 @@ async function consultarDisponibilidade(
               const [beh, bem] = b.end_time.split(':').map(Number)
               return slotMin2 >= bsh * 60 + bsm && slotMin2 < beh * 60 + bem
             })
-            if (!isBooked && !isBlocked) allSlots.push({ doctor, slot: new Date(slot) })
+            if (!isBooked && !isBlocked && slot.getTime() >= minSlotTime.getTime()) allSlots.push({ doctor, slot: new Date(slot) })
             slot.setUTCMinutes(slot.getUTCMinutes() + slotMin)
           }
         }
