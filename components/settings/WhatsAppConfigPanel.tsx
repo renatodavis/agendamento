@@ -204,7 +204,7 @@ export default function WhatsAppConfigPanel() {
                   onClick={() => selectApp(app.app_id)}
                   style={{
                     display: 'flex', flexDirection: 'column', alignItems: 'flex-start',
-                    width: '100%', padding: '10px 14px', border: 'none', background: 'none',
+                    width: '100%', padding: '10px 14px', border: 'none',
                     cursor: 'pointer', textAlign: 'left',
                     borderBottom: '1px solid var(--border)',
                     background: app.app_id === selectedAppId ? 'var(--panel)' : 'none',
