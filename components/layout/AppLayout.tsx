@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import WaPanel from '@/components/wa/WaPanel'
 import LogPanel, { type LogEntry } from '@/components/log/LogPanel'
 import AgendaBottomPanel, { type AgendaSection } from '@/components/agenda/AgendaBottomPanel'
+import NovoAgendamentoModal from '@/components/agenda/NovoAgendamentoModal'
 import { useApprovalCount } from '@/components/agenda/ApprovalPanel'
 import ProfilesPanel from '@/components/profiles/ProfilesPanel'
 import { useActiveProfile } from '@/lib/useActiveProfile'
@@ -26,6 +27,7 @@ export default function AppLayout() {
   const [section, setSection]       = useState<SidebarSection>('agenda')
   const [mobileTab, setMobileTab]   = useState<'agenda' | 'wa' | 'metrics' | 'ajustes'>('agenda')
   const [profilesOpen, setProfilesOpen] = useState(false)
+  const [novoAgendamentoOpen, setNovoAgendamentoOpen] = useState(false)
   const [aiAlert, setAiAlert]       = useState(false)
   const approvalCount               = useApprovalCount()
   const activeProfile               = useActiveProfile()
@@ -236,7 +238,7 @@ export default function AppLayout() {
                 </div>
                 <div className="aa-stats-actions">
                   <button className="aa-btn-ghost">Semana</button>
-                  <button className="aa-btn-primary">
+                  <button className="aa-btn-primary" onClick={() => setNovoAgendamentoOpen(true)}>
                     <Plus size={14} strokeWidth={2.5} /> Novo agendamento
                   </button>
                 </div>
@@ -292,6 +294,14 @@ export default function AppLayout() {
 
       {/* ── Perfis Modal ── */}
       {profilesOpen && <ProfilesPanel onClose={() => setProfilesOpen(false)} />}
+
+      {/* ── Novo Agendamento Modal ── */}
+      {novoAgendamentoOpen && (
+        <NovoAgendamentoModal
+          onClose={() => setNovoAgendamentoOpen(false)}
+          onCreated={() => setNovoAgendamentoOpen(false)}
+        />
+      )}
 
       {/* ══ MOBILE BOTTOM NAV ══ */}
       <nav className="aa-mobile-nav safe-bottom">
