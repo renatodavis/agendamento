@@ -6,83 +6,69 @@ import WaPanel from '@/components/wa/WaPanel'
 import LogPanel, { type LogEntry } from '@/components/log/LogPanel'
 import AgendaBottomPanel, { type AgendaSection } from '@/components/agenda/AgendaBottomPanel'
 import { useApprovalCount } from '@/components/agenda/ApprovalPanel'
-import { useClinicName } from '@/lib/useClinicName'
 import ProfilesPanel from '@/components/profiles/ProfilesPanel'
 import { useActiveProfile } from '@/lib/useActiveProfile'
-import { MessageCircle, CalendarDays, ChartColumn, Settings, SlidersHorizontal, PanelRight, LogOut, ChevronRight, Bot, CircleCheck, CalendarClock, Users, Webhook } from 'lucide-react'
+import {
+  CalendarDays, MessageCircle, Users, Briefcase,
+  BarChart2, Settings, LogOut, Bot, Plus, TrendingUp,
+  SlidersHorizontal,
+} from 'lucide-react'
 
-type MobileTab = 'wa' | 'agenda' | 'metrics' | 'config'
+type SidebarSection = 'agenda' | 'conversas' | 'clientes' | 'profissionais' | 'metricas' | 'ajustes'
+
+function todayLabel() {
+  return new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase()
+}
 
 export default function AppLayout() {
   const [logEntries, setLogEntries] = useState<LogEntry[]>([])
-  const [stats, setStats]         = useState({ total: 0, tokens: 0, latency: 0, cost: 0 })
-  const [mobileTab, setMobileTab] = useState<MobileTab>('agenda')
-  const [logOpen, setLogOpen]     = useState(true)
-  const [agendaSection, setAgendaSection] = useState<AgendaSection>('agenda')
-  const approvalCount             = useApprovalCount()
-  const clinicName                = useClinicName()
-  const router = useRouter()
-
-  const [aiAlert, setAiAlert] = useState(false)
+  const [stats, setStats]           = useState({ total: 0, tokens: 0, latency: 0, cost: 0, scheduled: 0, attended: 0, missed: 0 })
+  const [section, setSection]       = useState<SidebarSection>('agenda')
+  const [mobileTab, setMobileTab]   = useState<'agenda' | 'wa' | 'metrics' | 'ajustes'>('agenda')
   const [profilesOpen, setProfilesOpen] = useState(false)
-  const activeProfile = useActiveProfile()
+  const [aiAlert, setAiAlert]       = useState(false)
+  const approvalCount               = useApprovalCount()
+  const activeProfile               = useActiveProfile()
+  const router                      = useRouter()
+
+  const sb = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  )
 
   useEffect(() => {
     async function checkAi() {
       try {
-        const res = await fetch('/api/ai-status')
-        if (res.ok) {
-          const data = await res.json()
-          setAiAlert(data.ok === false)
-        }
-      } catch { /* silencioso */ }
+        const r = await fetch('/api/ai-status')
+        if (r.ok) { const d = await r.json(); setAiAlert(d.ok === false) }
+      } catch { /* silent */ }
     }
     checkAi()
-    const interval = setInterval(checkAi, 60_000)
-    return () => clearInterval(interval)
+    const t = setInterval(checkAi, 60_000)
+    return () => clearInterval(t)
   }, [])
 
-  // Busca stats diários do DB (inclui mensagens via webhook WhatsApp)
   useEffect(() => {
     async function loadStats() {
       try {
-        const res = await fetch('/api/stats')
-        if (!res.ok) return
-        const data = await res.json()
+        const r = await fetch('/api/stats')
+        if (!r.ok) return
+        const d = await r.json()
         setStats(s => ({
           ...s,
-          total:   data.messages   ?? s.total,
-          tokens:  (data.input_tokens ?? 0) + (data.output_tokens ?? 0),
-          cost:    data.cost_usd  ?? s.cost,
+          total:     d.messages       ?? s.total,
+          tokens:    (d.input_tokens ?? 0) + (d.output_tokens ?? 0),
+          cost:      d.cost_usd       ?? s.cost,
+          scheduled: d.scheduled      ?? s.scheduled,
+          attended:  d.attended       ?? s.attended,
+          missed:    d.missed         ?? s.missed,
         }))
-      } catch { /* silencioso */ }
+      } catch { /* silent */ }
     }
     loadStats()
-    const interval = setInterval(loadStats, 30_000)
-    return () => clearInterval(interval)
+    const t = setInterval(loadStats, 30_000)
+    return () => clearInterval(t)
   }, [])
-
-  async function fetchAgentLog() {
-    try {
-      const res = await fetch('/api/agent-log')
-      if (!res.ok) return
-      const data = await res.json()
-      if (Array.isArray(data.entries)) {
-        setLogEntries(data.entries.map((e: LogEntry & { ts: string }) => ({ ...e, ts: new Date(e.ts) })))
-      }
-    } catch { /* silencioso */ }
-  }
-
-  const sb = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-
-  async function handleLogout() {
-    await sb.auth.signOut()
-    router.push('/')
-    router.refresh()
-  }
 
   const handleLog = useCallback((e: LogEntry) => {
     setLogEntries(prev => [...prev, e])
@@ -92,333 +78,436 @@ export default function AppLayout() {
   const handleStats = useCallback((delta: { tokens?: number; latency?: number; cost?: number }) => {
     setStats(s => ({
       ...s,
-      tokens: s.tokens + (delta.tokens ?? 0),
+      tokens:  s.tokens + (delta.tokens ?? 0),
       latency: delta.latency ?? s.latency,
-      cost: s.cost + (delta.cost ?? 0),
+      cost:    s.cost + (delta.cost ?? 0),
     }))
   }, [])
 
+  async function fetchAgentLog() {
+    try {
+      const r = await fetch('/api/agent-log')
+      if (!r.ok) return
+      const d = await r.json()
+      if (Array.isArray(d.entries))
+        setLogEntries(d.entries.map((e: LogEntry & { ts: string }) => ({ ...e, ts: new Date(e.ts) })))
+    } catch { /* silent */ }
+  }
+
+  async function handleLogout() {
+    await sb.auth.signOut()
+    router.push('/')
+    router.refresh()
+  }
+
+  // Map sidebar section → AgendaBottomPanel view
+  const agendaView: Record<SidebarSection, AgendaSection> = {
+    agenda:        'agenda',
+    conversas:     'approvals',
+    clientes:      'contacts',
+    profissionais: 'schedules',
+    metricas:      'agenda',
+    ajustes:       'config',
+  }
+
+  const navItems: { id: SidebarSection; Icon: React.ElementType; label: string; badge?: number }[] = [
+    { id: 'agenda',        Icon: CalendarDays,  label: 'Agenda' },
+    { id: 'conversas',     Icon: MessageCircle, label: 'Conversas',    badge: approvalCount },
+    { id: 'clientes',      Icon: Users,         label: 'Clientes' },
+    { id: 'profissionais', Icon: Briefcase,     label: 'Profissionais' },
+    { id: 'metricas',      Icon: BarChart2,     label: 'Métricas' },
+    { id: 'ajustes',       Icon: Settings,      label: 'Ajustes' },
+  ]
+
+  const attendanceRate = stats.scheduled > 0
+    ? Math.round((stats.attended / stats.scheduled) * 100)
+    : null
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: 'var(--background)', overflow: 'hidden' }}>
+    <div className="aa-layout">
 
       {/* ── Alerta de crédito IA ── */}
       {aiAlert && (
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-          padding: '6px 16px', flexShrink: 0, fontSize: 12, fontWeight: 600,
-          background: '#F97316', color: '#fff',
-        }}>
-          <span>⚠️</span>
-          <span>Saldo Anthropic insuficiente — o bot de IA está offline.</span>
-          <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener noreferrer"
-            style={{ color: '#fff', textDecoration: 'underline', fontWeight: 700 }}>
+        <div className="aa-ai-alert">
+          ⚠️ Saldo Anthropic insuficiente — o bot está offline.{' '}
+          <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener noreferrer">
             Adicionar créditos →
           </a>
         </div>
       )}
 
-      {/* ── Header ── */}
-      <header style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 16px', height: 52, flexShrink: 0,
-        background: 'var(--panel)',
-        borderBottom: '1px solid var(--border)',
-        boxShadow: 'var(--shadow-sm)',
-      }}>
-        {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-          <div style={{
-            width: 34, height: 34, borderRadius: 10,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0,
-            background: 'linear-gradient(135deg, var(--accent) 0%, #1aae53 100%)',
-            boxShadow: '0 2px 8px rgba(37,211,102,.3)',
-          }}>{activeProfile?.vocabulary?.emoji ?? '🏥'}</div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 14, lineHeight: 1.1, letterSpacing: '-.01em', color: 'var(--foreground)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {clinicName}
-            </div>
-            <div style={{ fontSize: 11, marginTop: 2, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {activeProfile ? activeProfile.name : 'Sistema de IA'}
-            </div>
-          </div>
-        </div>
+      <div className="aa-body">
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          {/* AI status — single source of "online" state */}
-          <div title={aiAlert ? 'Sem crédito na Anthropic — respostas automáticas pausadas' : 'A IA está respondendo no WhatsApp'}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px',
-              borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
-              border: `1px solid ${aiAlert ? '#F9731660' : '#14C38E40'}`,
-              background: aiAlert ? '#F9731612' : '#14C38E10',
-              color: aiAlert ? '#F97316' : 'var(--green)',
-            }}>
-            <Bot size={13} />
-            {aiAlert ? 'IA pausada' : 'IA ativa'}
+        {/* ══ SIDEBAR ══ */}
+        <aside className="aa-sidebar">
+
+          {/* Logo */}
+          <div className="aa-logo-wrap">
+            <div className="aa-logo-icon">
+              <Plus size={16} strokeWidth={3} color="#fff" />
+            </div>
+            <span className="aa-logo-text">
+              Agenda<span style={{ color: 'var(--accent)' }}>Agentic</span>
+            </span>
           </div>
 
-          {/* Desktop actions */}
-          <div className="hidden-mobile" style={{ alignItems: 'center', gap: 4 }}>
-            <button className="hdr-btn" onClick={() => setProfilesOpen(true)} title="Perfis de negócio">
-              <SlidersHorizontal size={14} /> Perfis
+          {/* Navigation */}
+          <nav className="aa-nav">
+            {navItems.map(({ id, Icon, label, badge }) => (
+              <button
+                key={id}
+                className={`aa-nav-item ${section === id ? 'active' : ''}`}
+                onClick={() => setSection(id)}
+              >
+                <span className="aa-nav-icon-wrap">
+                  <Icon size={17} strokeWidth={section === id ? 2.25 : 1.75} />
+                  {!!badge && badge > 0 && (
+                    <span className="aa-nav-badge">{badge}</span>
+                  )}
+                </span>
+                <span className="aa-nav-label">{label}</span>
+              </button>
+            ))}
+          </nav>
+
+          {/* Spacer */}
+          <div style={{ flex: 1 }} />
+
+          {/* AI status card */}
+          <div className={`aa-ai-card ${aiAlert ? 'paused' : 'active'}`}>
+            <div className="aa-ai-dot" />
+            <div>
+              <div className="aa-ai-title">{aiAlert ? 'IA pausada' : 'Assistente ativo'}</div>
+              <div className="aa-ai-sub">
+                {aiAlert ? 'Sem crédito' : `${stats.total} conversas hoje`}
+              </div>
+            </div>
+            <Bot size={16} style={{ marginLeft: 'auto', flexShrink: 0, opacity: .5 }} />
+          </div>
+
+          {/* Perfis + Logout */}
+          <div className="aa-sidebar-actions">
+            <button className="aa-sidebar-btn" onClick={() => setProfilesOpen(true)} title="Perfis">
+              <SlidersHorizontal size={15} />
             </button>
-            <button className="hdr-btn" onClick={() => setLogOpen(v => !v)}
-              title={logOpen ? 'Esconder monitor da IA' : 'Mostrar monitor da IA'}
-              style={{ color: logOpen ? 'var(--foreground)' : undefined }}>
-              <PanelRight size={14} /> Monitor
-            </button>
-            <button className="hdr-btn" onClick={handleLogout} title="Sair" aria-label="Sair">
-              <LogOut size={14} />
+            <button className="aa-sidebar-btn" onClick={handleLogout} title="Sair">
+              <LogOut size={15} />
             </button>
           </div>
-        </div>
-      </header>
+        </aside>
+
+        {/* ══ MAIN CONTENT ══ */}
+        <main className="aa-main">
+
+          {/* Stats header — only on agenda view */}
+          {section === 'agenda' && (
+            <div className="aa-stats-header">
+              <div className="aa-stats-top">
+                <div>
+                  <div className="aa-date-label">{todayLabel()}</div>
+                  <h1 className="aa-hero-stat">
+                    {stats.missed > 0
+                      ? <><strong>{stats.missed}</strong> falt{stats.missed === 1 ? 'a' : 'as'} esta semana</>
+                      : <><strong>{stats.total}</strong> atendimentos hoje</>
+                    }
+                  </h1>
+                </div>
+                <div className="aa-stats-actions">
+                  <button className="aa-btn-ghost">Semana</button>
+                  <button className="aa-btn-primary">
+                    <Plus size={14} strokeWidth={2.5} /> Novo agendamento
+                  </button>
+                </div>
+              </div>
+
+              <div className="aa-kpis">
+                <div className="aa-kpi">
+                  <div className="aa-kpi-label">Agendados pelo assistente</div>
+                  <div className="aa-kpi-value">{stats.total}</div>
+                  {stats.total > 0 && (
+                    <div className="aa-kpi-trend up">
+                      <TrendingUp size={12} /> em andamento
+                    </div>
+                  )}
+                </div>
+                <div className="aa-kpi">
+                  <div className="aa-kpi-label">Comparecimento</div>
+                  <div className="aa-kpi-value">
+                    {attendanceRate !== null ? `${attendanceRate}%` : '—'}
+                  </div>
+                </div>
+                <div className="aa-kpi">
+                  <div className="aa-kpi-label">Faltas</div>
+                  <div className="aa-kpi-value">{stats.missed}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Section content */}
+          <div className="aa-section-content">
+            {section === 'metricas' ? (
+              <LogPanel entries={logEntries} stats={stats} onFetch={fetchAgentLog} />
+            ) : (
+              <AgendaBottomPanel view={agendaView[section]} />
+            )}
+          </div>
+        </main>
+
+        {/* ══ RIGHT: CONVERSA AO VIVO ══ */}
+        <aside className="aa-wa-panel">
+          <div className="aa-wa-header">
+            <Bot size={14} style={{ color: 'var(--accent)' }} />
+            <span>CONVERSA AO VIVO</span>
+            <div className={`aa-wa-dot ${aiAlert ? 'paused' : 'live'}`} />
+          </div>
+          <div className="aa-wa-body">
+            <WaPanel onLog={handleLog} onStats={handleStats} />
+          </div>
+        </aside>
+
+      </div>
 
       {/* ── Perfis Modal ── */}
       {profilesOpen && <ProfilesPanel onClose={() => setProfilesOpen(false)} />}
 
-      {/* ── Body ── */}
-      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-
-        {/* WaPanel */}
-        <div className={`wa-col ${mobileTab === 'wa' ? 'mobile-show' : 'mobile-hide'}`}
-          style={{ borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <WaPanel onLog={handleLog} onStats={handleStats} />
-        </div>
-
-        {/* Center: sub-nav + AgendaBottomPanel + Pipeline */}
-        <div className={`center-col ${mobileTab === 'agenda' ? 'mobile-show' : 'mobile-hide'}`}
-          style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, borderRight: '1px solid var(--border)', overflow: 'hidden' }}
-        >
-          {/* Sub-navigation */}
-          <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--panel)', flexShrink: 0 }}>
-            {([
-              { id: 'agenda',    Icon: CalendarDays,  label: 'Agenda',    badge: 0 },
-              { id: 'approvals', Icon: CircleCheck,   label: 'Aprovações',badge: approvalCount },
-              { id: 'contacts',  Icon: Users,         label: 'Contatos',  badge: 0 },
-              { id: 'schedules', Icon: CalendarClock, label: 'Horários',  badge: 0 },
-              { id: 'config',    Icon: Settings,      label: 'Config',    badge: 0 },
-              { id: 'whatsapp',  Icon: Webhook,       label: 'Meta',      badge: 0 },
-            ] as { id: AgendaSection; Icon: React.ElementType; label: string; badge: number }[]).map(tab => (
-              <button key={tab.id}
-                onClick={() => setAgendaSection(tab.id)}
-                style={{
-                  flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-                  padding: '7px 4px 5px', border: 'none', background: 'none', cursor: 'pointer',
-                  borderBottom: agendaSection === tab.id ? '2px solid var(--green)' : '2px solid transparent',
-                  color: agendaSection === tab.id ? 'var(--green)' : 'var(--muted)',
-                  fontSize: 10, fontWeight: agendaSection === tab.id ? 700 : 500,
-                  transition: 'color .15s',
-                }}>
-                <span style={{ position: 'relative', display: 'inline-block', lineHeight: 0 }}>
-                  <tab.Icon size={16} strokeWidth={agendaSection === tab.id ? 2.25 : 1.75} />
-                  {tab.badge > 0 && (
-                    <span style={{
-                      position: 'absolute', top: -4, right: -6,
-                      minWidth: 14, height: 14, borderRadius: 7,
-                      background: '#F0A500', color: '#fff',
-                      fontSize: 8, fontWeight: 800,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      padding: '0 2px',
-                    }}>{tab.badge}</span>
-                  )}
-                </span>
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          <AgendaBottomPanel view={agendaSection} />
-        </div>
-
-        {/* Right panel: Log — desktop only when logOpen, always on mobile metrics tab */}
-        <div className={[
-          'log-col-wrap',
-          mobileTab === 'metrics' ? 'mobile-show' : 'mobile-hide',
-          logOpen ? 'log-open' : 'log-closed',
-        ].join(' ')}>
-          <LogPanel entries={logEntries} stats={stats} onFetch={fetchAgentLog} />
-        </div>
-
-        {/* Config panel — mobile only */}
-        {mobileTab === 'config' && (
-          <div className="mobile-config-panel" style={{
-            flex: 1, display: 'flex', flexDirection: 'column', padding: 20, gap: 12,
-            overflowY: 'auto', background: 'var(--background)',
-          }}>
-            {/* Profile info card */}
-            <div style={{
-              borderRadius: 14, padding: 16, border: '1px solid var(--border)',
-              background: 'var(--card)', boxShadow: 'var(--shadow-sm)',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                <div style={{
-                  width: 44, height: 44, borderRadius: 12, fontSize: 22,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'linear-gradient(135deg, var(--green) 0%, #0A7A5E 100%)',
-                }}>
-                  {activeProfile?.vocabulary?.emoji ?? '🏥'}
-                </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>{clinicName}</div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                    {activeProfile?.name ?? 'Sistema de IA'}
-                  </div>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 11, color: 'var(--muted)' }}>
-                {[activeProfile?.vocabulary?.client, activeProfile?.vocabulary?.professional, activeProfile?.vocabulary?.appointment]
-                  .filter(Boolean)
-                  .map(w => (
-                    <span key={w} style={{ padding: '2px 8px', borderRadius: 20, border: '1px solid var(--border)' }}>{w}</span>
-                  ))}
-              </div>
-            </div>
-
-            {/* Divider */}
-            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)', paddingTop: 4 }}>
-              Configurações
-            </div>
-
-            {/* Perfis button */}
-            <button
-              onClick={() => setProfilesOpen(true)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 14,
-                padding: '14px 16px', borderRadius: 12,
-                border: '1px solid var(--border)', background: 'var(--card)',
-                cursor: 'pointer', textAlign: 'left', width: '100%',
-                boxShadow: 'var(--shadow-sm)',
-              }}>
-              <SlidersHorizontal size={20} style={{ color: 'var(--green)', flexShrink: 0 }} />
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--foreground)' }}>Perfis de negócio</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Trocar ramo, editar vocabulário, dados de teste</div>
-              </div>
-              <ChevronRight size={16} style={{ marginLeft: 'auto', color: 'var(--muted)', flexShrink: 0 }} />
-            </button>
-
-            {/* Stats */}
-            <div style={{
-              borderRadius: 12, padding: 16, border: '1px solid var(--border)',
-              background: 'var(--card)', display: 'grid', gridTemplateColumns: '1fr 1fr',
-              gap: 12, boxShadow: 'var(--shadow-sm)',
-            }}>
-              {[
-                { label: 'Consultas hoje', value: stats.total },
-                { label: 'Tokens usados',  value: stats.tokens.toLocaleString('pt-BR') },
-                { label: 'Custo USD',       value: `$${stats.cost.toFixed(4)}` },
-                { label: 'Latência',        value: stats.latency > 0 ? `${stats.latency}ms` : '—' },
-              ].map(({ label, value }) => (
-                <div key={label}>
-                  <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 2 }}>{label}</div>
-                  <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--foreground)', fontVariantNumeric: 'tabular-nums' }}>{value}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Sair */}
-            <button
-              onClick={handleLogout}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 14,
-                padding: '14px 16px', borderRadius: 12,
-                border: '1px solid #EF444440', background: '#EF444408',
-                cursor: 'pointer', textAlign: 'left', width: '100%',
-                marginTop: 'auto',
-              }}>
-              <LogOut size={20} style={{ color: '#EF4444', flexShrink: 0 }} />
-              <div style={{ fontWeight: 600, fontSize: 13, color: '#EF4444' }}>Sair</div>
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* ── Mobile bottom nav ── */}
-      <nav className="mobile-nav safe-bottom" style={{
-        borderTop: '1px solid var(--border)',
-        background: 'var(--panel)',
-        boxShadow: '0 -2px 8px rgba(0,0,0,.06)',
-      }}>
+      {/* ══ MOBILE BOTTOM NAV ══ */}
+      <nav className="aa-mobile-nav safe-bottom">
         {([
-          { id: 'agenda',  Icon: CalendarDays,  label: 'Agenda' },
-          { id: 'wa',      Icon: MessageCircle, label: 'Conversas' },
-          { id: 'metrics', Icon: ChartColumn,   label: 'Monitor' },
-          { id: 'config',  Icon: Settings,      label: 'Ajustes' },
-        ] as const).map(tab => (
+          { id: 'agenda' as const,  Icon: CalendarDays,  label: 'Agenda'    },
+          { id: 'wa' as const,      Icon: MessageCircle, label: 'Conversas' },
+          { id: 'metrics' as const, Icon: BarChart2,     label: 'Métricas'  },
+          { id: 'ajustes' as const, Icon: Settings,      label: 'Ajustes'   },
+        ]).map(tab => (
           <button key={tab.id}
+            className={`aa-mobile-tab ${mobileTab === tab.id ? 'active' : ''}`}
             onClick={() => setMobileTab(tab.id)}
-            aria-current={mobileTab === tab.id ? 'page' : undefined}
-            style={{
-              flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative',
-              gap: 3, padding: '8px 0 6px', border: 'none', background: 'none', cursor: 'pointer',
-              color: mobileTab === tab.id ? 'var(--green)' : 'var(--muted)',
-              fontSize: 11, fontWeight: mobileTab === tab.id ? 700 : 500,
-              transition: 'color .15s',
-            }}>
-            <span style={{ lineHeight: 0, position: 'relative', display: 'inline-block' }}>
-              <tab.Icon size={21} strokeWidth={mobileTab === tab.id ? 2.25 : 1.75} />
-              {/* Approval badge on Agenda icon */}
-              {tab.id === 'agenda' && approvalCount > 0 && (
-                <span style={{
-                  position: 'absolute', top: -4, right: -6,
-                  minWidth: 16, height: 16, borderRadius: 8,
-                  background: '#F0A500', color: '#fff',
-                  fontSize: 9, fontWeight: 800,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  padding: '0 3px', lineHeight: 1,
-                  boxShadow: '0 1px 4px rgba(0,0,0,.3)',
-                }}>
-                  {approvalCount}
-                </span>
-              )}
-            </span>
-            {tab.label}
-            {mobileTab === tab.id && (
-              <span style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--green)', marginTop: 1 }} />
-            )}
+          >
+            <tab.Icon size={21} strokeWidth={mobileTab === tab.id ? 2.25 : 1.75} />
+            <span>{tab.label}</span>
+            {mobileTab === tab.id && <span className="aa-mobile-dot" />}
           </button>
         ))}
       </nav>
 
       <style>{`
+        /* ── Layout shell ── */
+        .aa-layout {
+          display: flex; flex-direction: column;
+          height: 100dvh; background: var(--background); overflow: hidden;
+        }
+        .aa-ai-alert {
+          display: flex; align-items: center; justify-content: center; gap: 8px;
+          padding: 6px 16px; flex-shrink: 0; font-size: 12px; font-weight: 600;
+          background: #F97316; color: #fff;
+        }
+        .aa-ai-alert a { color: #fff; text-decoration: underline; font-weight: 700; }
+        .aa-body {
+          display: flex; flex: 1; min-height: 0;
+        }
+
+        /* ── Sidebar ── */
+        .aa-sidebar {
+          width: 200px; flex-shrink: 0;
+          display: flex; flex-direction: column;
+          background: var(--panel); border-right: 1px solid var(--border);
+          padding: 16px 0 12px; gap: 4px;
+        }
+        .aa-logo-wrap {
+          display: flex; align-items: center; gap: 9px;
+          padding: 0 16px 16px; border-bottom: 1px solid var(--border); margin-bottom: 8px;
+        }
+        .aa-logo-icon {
+          width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+          background: linear-gradient(135deg, var(--accent) 0%, #1aae53 100%);
+          display: flex; align-items: center; justify-content: center;
+          box-shadow: 0 2px 8px rgba(37,211,102,.3);
+        }
+        .aa-logo-text {
+          font-weight: 800; font-size: 14px; letter-spacing: -.02em;
+          color: var(--foreground);
+        }
+
+        /* Nav */
+        .aa-nav { display: flex; flex-direction: column; gap: 2px; padding: 0 8px; }
+        .aa-nav-item {
+          display: flex; align-items: center; gap: 10px;
+          padding: 9px 10px; border-radius: 10px; border: none;
+          background: none; cursor: pointer; text-align: left; width: 100%;
+          color: var(--muted); font-size: 13px; font-weight: 500;
+          transition: background .15s, color .15s;
+        }
+        .aa-nav-item:hover { background: var(--card); color: var(--foreground); }
+        .aa-nav-item.active {
+          background: rgba(37,211,102,.12);
+          color: var(--accent); font-weight: 700;
+        }
+        .aa-nav-icon-wrap { position: relative; display: inline-flex; line-height: 0; flex-shrink: 0; }
+        .aa-nav-badge {
+          position: absolute; top: -4px; right: -6px;
+          min-width: 14px; height: 14px; border-radius: 7px;
+          background: #F0A500; color: #fff;
+          font-size: 8px; font-weight: 800;
+          display: flex; align-items: center; justify-content: center; padding: 0 2px;
+        }
+        .aa-nav-label { white-space: nowrap; }
+
+        /* AI card */
+        .aa-ai-card {
+          display: flex; align-items: center; gap: 10px;
+          margin: 8px 10px 4px; padding: 10px 12px;
+          border-radius: 12px; border: 1px solid var(--border);
+          background: var(--card); font-size: 12px;
+        }
+        .aa-ai-dot {
+          width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+          animation: pulse 2s ease-in-out infinite;
+        }
+        .aa-ai-card.active .aa-ai-dot { background: var(--accent); }
+        .aa-ai-card.paused .aa-ai-dot { background: #F97316; animation: none; }
+        .aa-ai-title { font-weight: 700; color: var(--foreground); }
+        .aa-ai-sub   { font-size: 10px; color: var(--muted); margin-top: 1px; }
+
+        /* Sidebar actions */
+        .aa-sidebar-actions {
+          display: flex; gap: 4px; padding: 4px 10px 0;
+        }
+        .aa-sidebar-btn {
+          flex: 1; display: flex; align-items: center; justify-content: center;
+          height: 32px; border-radius: 8px; border: 1px solid var(--border);
+          background: none; cursor: pointer; color: var(--muted);
+          transition: background .15s, color .15s;
+        }
+        .aa-sidebar-btn:hover { background: var(--card); color: var(--foreground); }
+
+        /* ── Main content ── */
+        .aa-main {
+          flex: 1; min-width: 0; display: flex; flex-direction: column;
+          overflow: hidden;
+        }
+
+        /* Stats header */
+        .aa-stats-header {
+          padding: 16px 20px 0; flex-shrink: 0; border-bottom: 1px solid var(--border);
+          background: var(--panel);
+        }
+        .aa-stats-top {
+          display: flex; align-items: flex-start; justify-content: space-between;
+          gap: 16px; flex-wrap: wrap; margin-bottom: 14px;
+        }
+        .aa-date-label {
+          font-size: 10px; font-weight: 700; letter-spacing: .08em;
+          color: var(--muted); margin-bottom: 4px;
+        }
+        .aa-hero-stat {
+          font-size: 22px; font-weight: 400; color: var(--foreground);
+          margin: 0; line-height: 1.2;
+        }
+        .aa-hero-stat strong { font-weight: 800; }
+        .aa-stats-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .aa-btn-ghost {
+          height: 34px; padding: 0 14px; border-radius: 8px;
+          border: 1px solid var(--border); background: none;
+          color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer;
+          transition: background .15s, color .15s;
+        }
+        .aa-btn-ghost:hover { background: var(--card); color: var(--foreground); }
+        .aa-btn-primary {
+          height: 34px; padding: 0 14px; border-radius: 8px; border: none;
+          background: var(--accent); color: #fff;
+          font-size: 12px; font-weight: 700; cursor: pointer;
+          display: flex; align-items: center; gap: 6px;
+          transition: opacity .15s, transform .1s;
+        }
+        .aa-btn-primary:hover { opacity: .9; transform: translateY(-1px); }
+
+        /* KPIs */
+        .aa-kpis {
+          display: flex; gap: 0;
+        }
+        .aa-kpi {
+          flex: 1; padding: 10px 16px; border-right: 1px solid var(--border);
+        }
+        .aa-kpi:last-child { border-right: none; }
+        .aa-kpi-label {
+          font-size: 10px; font-weight: 600; text-transform: uppercase;
+          letter-spacing: .06em; color: var(--muted); margin-bottom: 3px;
+        }
+        .aa-kpi-value {
+          font-size: 20px; font-weight: 800; color: var(--foreground);
+          letter-spacing: -.02em; font-variant-numeric: tabular-nums;
+        }
+        .aa-kpi-trend {
+          font-size: 10px; font-weight: 600; display: flex; align-items: center; gap: 3px;
+          margin-top: 2px;
+        }
+        .aa-kpi-trend.up { color: var(--accent); }
+        .aa-kpi-trend.down { color: var(--red); }
+
+        /* Section content */
+        .aa-section-content {
+          flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column;
+        }
+
+        /* ── Right: WaPanel ── */
+        .aa-wa-panel {
+          width: 300px; flex-shrink: 0;
+          display: flex; flex-direction: column;
+          border-left: 1px solid var(--border);
+          background: var(--panel); overflow: hidden;
+        }
+        .aa-wa-header {
+          display: flex; align-items: center; gap: 7px;
+          padding: 10px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+          font-size: 10px; font-weight: 700; letter-spacing: .08em; color: var(--muted);
+          text-transform: uppercase;
+        }
+        .aa-wa-dot {
+          width: 7px; height: 7px; border-radius: 50%; margin-left: auto;
+        }
+        .aa-wa-dot.live   { background: var(--accent); animation: pulse 2s ease-in-out infinite; }
+        .aa-wa-dot.paused { background: #F97316; }
+        .aa-wa-body { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+
+        /* ── Mobile nav ── */
+        .aa-mobile-nav {
+          display: none; border-top: 1px solid var(--border);
+          background: var(--panel); box-shadow: 0 -2px 8px rgba(0,0,0,.06);
+        }
+        .aa-mobile-tab {
+          flex: 1; display: flex; flex-direction: column; align-items: center;
+          gap: 3px; padding: 8px 0 6px; border: none; background: none; cursor: pointer;
+          color: var(--muted); font-size: 11px; font-weight: 500;
+          transition: color .15s;
+        }
+        .aa-mobile-tab.active { color: var(--accent); font-weight: 700; }
+        .aa-mobile-dot {
+          width: 4px; height: 4px; border-radius: 50%; background: var(--accent);
+        }
+
+        /* ── Animations ── */
         @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.85)} }
-        .hdr-btn { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border-radius: 8px; font-size: 12px; font-weight: 600; border: 1px solid transparent; background: transparent; color: var(--muted); cursor: pointer; transition: background .15s, color .15s; }
-        .hdr-btn:hover { background: var(--card); border-color: var(--border); color: var(--foreground); }
 
-        /* Desktop (≥1024px): 3 cols */
-        .wa-col       { width: 264px; flex-shrink: 0; display: flex; flex-direction: column; }
-        .center-col   { flex: 1; display: flex; flex-direction: column; }
-        .log-col-wrap { width: 218px; flex-shrink: 0; border-left: 1px solid var(--border); display: flex; flex-direction: column; }
-        .log-col-wrap.log-closed { display: none; }
-        .mobile-nav   { display: none; }
-        .hidden-mobile { display: flex; }
-        .visible-mobile{ display: none; }
-        /* on desktop, mobile-hide has no effect */
-        .mobile-hide.wa-col, .mobile-hide.center-col { display: flex !important; }
-
-        /* Tablet (768-1023px): WA + Center only */
-        @media (min-width: 768px) and (max-width: 1023px) {
-          .wa-col      { width: 240px; }
-          .log-col-wrap{ display: none; }
-          .mobile-hide.wa-col, .mobile-hide.center-col { display: flex !important; }
+        /* ── Responsive ── */
+        @media (max-width: 1200px) {
+          .aa-wa-panel { width: 260px; }
         }
-
-        /* Mobile (<768px): one panel at a time + bottom nav */
+        @media (max-width: 1023px) {
+          .aa-sidebar { width: 52px; }
+          .aa-logo-text, .aa-nav-label, .aa-ai-title, .aa-ai-sub, .aa-ai-card > Bot { display: none; }
+          .aa-logo-wrap { padding: 0 12px 14px; justify-content: center; }
+          .aa-nav { padding: 0 4px; }
+          .aa-nav-item { justify-content: center; padding: 10px 8px; }
+          .aa-sidebar-actions { justify-content: center; padding: 4px 6px 0; }
+          .aa-sidebar-btn { flex: none; width: 36px; }
+          .aa-ai-card { padding: 8px; justify-content: center; }
+          .aa-ai-dot { margin: 0; }
+        }
         @media (max-width: 767px) {
-          .wa-col    { width: 100% !important; flex-shrink: 0; border-right: none !important; }
-          .center-col{ width: 100% !important; flex-shrink: 0; border-right: none !important; }
-          .wa-col.mobile-hide    { display: none !important; }
-          .center-col.mobile-hide{ display: none !important; }
-          .log-col-wrap          { display: none !important; }
-          .log-col-wrap.mobile-show { display: flex !important; flex: 1; width: 100% !important; border-left: none !important; }
-          .mobile-nav  { display: flex !important; }
-          .hidden-mobile { display: none !important; }
-          .visible-mobile{ display: flex !important; }
-          .mobile-config-panel { display: flex !important; }
-        }
-        /* Hide config panel on desktop */
-        @media (min-width: 768px) {
-          .mobile-config-panel { display: none !important; }
+          .aa-sidebar, .aa-wa-panel { display: none; }
+          .aa-mobile-nav { display: flex; }
+          .aa-stats-header { padding: 12px 16px 0; }
+          .aa-hero-stat { font-size: 18px; }
         }
       `}</style>
     </div>
