@@ -219,7 +219,8 @@ async function consultarDisponibilidade(
     const fmtDate = (d: Date) => d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'UTC' })
     const fmtTime = (d: Date) => d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })
     const allSlots: { doctor: typeof matchingDoctors[0]; slot: Date }[] = []
-    const now = new Date()
+    // Slots usam a hora de Brasília marcada como UTC; "agora" precisa estar na mesma escala
+    const now = new Date(Date.now() - 3 * 60 * 60 * 1000)
     // Mínimo: 1 hora a partir de agora — slots antes disso são descartados
     const minSlotTime = new Date(now.getTime() + 60 * 60 * 1000)
     const todayUTC = new Date(now); todayUTC.setUTCHours(0, 0, 0, 0)
@@ -388,7 +389,7 @@ async function consultarAgendamentos(db: SupabaseClient, sessionId: string, stat
   try {
     const patientId = await resolvePatientId(db, sessionId)
     if (!patientId) return 'Cliente ainda não cadastrado — nenhum agendamento encontrado.'
-    const now = new Date()
+    const now = new Date(Date.now() - 3 * 60 * 60 * 1000) // mesma escala de scheduled_at (Brasília como UTC)
     const pastCutoff = new Date(now); pastCutoff.setDate(pastCutoff.getDate() - 7)
     let query = db.from('appointments')
       .select('id, scheduled_at, status, cancel_reason, type, doctor:doctors(name, specialty)')

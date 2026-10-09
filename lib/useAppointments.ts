@@ -3,12 +3,12 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from './supabase'
 import type { Appointment, AppointmentStatus } from '@/types'
 
+// scheduled_at guarda a hora de Brasília marcada como UTC, então o dia local vai de T00:00Z a T23:59Z
 function dayBounds(offsetFromToday: number) {
   const d = new Date()
   d.setDate(d.getDate() + offsetFromToday)
-  const start = new Date(d); start.setHours(0, 0, 0, 0)
-  const end   = new Date(d); end.setHours(23, 59, 59, 999)
-  return { start: start.toISOString(), end: end.toISOString() }
+  const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return { start: `${day}T00:00:00.000Z`, end: `${day}T23:59:59.999Z` }
 }
 
 export function useAppointments(dayOffset: number) {

@@ -12,7 +12,7 @@ import { useActiveProfile } from '@/lib/useActiveProfile'
 import {
   CalendarDays, MessageCircle, Users, Briefcase,
   BarChart2, Settings, LogOut, Bot, Plus, TrendingUp,
-  SlidersHorizontal, Sun, Moon,
+  SlidersHorizontal, Sun, Moon, Menu,
 } from 'lucide-react'
 
 type SidebarSection = 'agenda' | 'conversas' | 'clientes' | 'profissionais' | 'metricas' | 'ajustes'
@@ -23,9 +23,11 @@ function todayLabel() {
 
 export default function AppLayout() {
   const [logEntries, setLogEntries] = useState<LogEntry[]>([])
-  const [stats, setStats]           = useState({ total: 0, tokens: 0, latency: 0, cost: 0, scheduled: 0, attended: 0, missed: 0 })
+  const [stats, setStats]           = useState({ total: 0, tokens: 0, latency: 0, cost: 0 })
+  const [apptStats, setApptStats]   = useState({ confirmedToday: 0, assistantToday: 0, attendedWeek: 0, missedWeek: 0 })
   const [section, setSection]       = useState<SidebarSection>('agenda')
-  const [mobileTab, setMobileTab]   = useState<'agenda' | 'wa' | 'metrics' | 'ajustes'>('agenda')
+  const [mobileLive, setMobileLive] = useState(false)
+  const [moreOpen, setMoreOpen]     = useState(false)
   const [profilesOpen, setProfilesOpen] = useState(false)
   const [novoAgendamentoOpen, setNovoAgendamentoOpen] = useState(false)
   const [aiAlert, setAiAlert]       = useState(false)
@@ -69,32 +71,38 @@ export default function AppLayout() {
     return () => clearInterval(t)
   }, [])
 
+  const loadStats = useCallback(async () => {
+    try {
+      const r = await fetch('/api/stats')
+      if (!r.ok) return
+      const d = await r.json()
+      setStats(s => ({
+        ...s,
+        total:  d.messages ?? s.total,
+        tokens: (d.input_tokens ?? 0) + (d.output_tokens ?? 0),
+        cost:   d.cost_usd ?? s.cost,
+      }))
+      setApptStats({
+        confirmedToday: d.confirmed_today           ?? 0,
+        assistantToday: d.assistant_confirmed_today ?? 0,
+        attendedWeek:   d.attended_week             ?? 0,
+        missedWeek:     d.missed_week               ?? 0,
+      })
+    } catch { /* silent */ }
+  }, [])
+
   useEffect(() => {
-    async function loadStats() {
-      try {
-        const r = await fetch('/api/stats')
-        if (!r.ok) return
-        const d = await r.json()
-        setStats(s => ({
-          ...s,
-          total:     d.messages       ?? s.total,
-          tokens:    (d.input_tokens ?? 0) + (d.output_tokens ?? 0),
-          cost:      d.cost_usd       ?? s.cost,
-          scheduled: d.scheduled      ?? s.scheduled,
-          attended:  d.attended       ?? s.attended,
-          missed:    d.missed         ?? s.missed,
-        }))
-      } catch { /* silent */ }
-    }
     loadStats()
     const t = setInterval(loadStats, 30_000)
     return () => clearInterval(t)
-  }, [])
+  }, [loadStats])
 
   const handleLog = useCallback((e: LogEntry) => {
     setLogEntries(prev => [...prev, e])
     if (e.agent === 'paciente') setStats(s => ({ ...s, total: s.total + 1 }))
-  }, [])
+    // a resposta do assistente pode ter confirmado um agendamento (paciente respondeu SIM)
+    else if (e.status === 'done') loadStats()
+  }, [loadStats])
 
   const handleStats = useCallback((delta: { tokens?: number; latency?: number; cost?: number }) => {
     setStats(s => ({
@@ -140,12 +148,23 @@ export default function AppLayout() {
     { id: 'ajustes',       Icon: Settings,      label: 'Ajustes' },
   ]
 
-  const attendanceRate = stats.scheduled > 0
-    ? Math.round((stats.attended / stats.scheduled) * 100)
+  const mobileTabs = ['agenda', 'conversas', 'metricas'] as const
+  const activeMobileTab = mobileLive ? 'aovivo'
+    : (mobileTabs as readonly string[]).includes(section) ? section : 'mais'
+
+  function goToSection(id: SidebarSection) {
+    setSection(id)
+    setMobileLive(false)
+    setMoreOpen(false)
+  }
+
+  const closedWeek = apptStats.attendedWeek + apptStats.missedWeek
+  const attendanceRate = closedWeek > 0
+    ? Math.round((apptStats.attendedWeek / closedWeek) * 100)
     : null
 
   return (
-    <div className="aa-layout">
+    <div className={`aa-layout ${mobileLive ? 'mobile-live' : ''}`}>
 
       {/* ── Alerta de crédito IA ── */}
       {aiAlert && (
@@ -230,10 +249,7 @@ export default function AppLayout() {
                 <div>
                   <div className="aa-date-label">{todayLabel()}</div>
                   <h1 className="aa-hero-stat">
-                    {stats.missed > 0
-                      ? <><strong>{stats.missed}</strong> falt{stats.missed === 1 ? 'a' : 'as'} esta semana</>
-                      : <><strong>{stats.total}</strong> atendimentos hoje</>
-                    }
+                    <strong>{apptStats.confirmedToday}</strong> agendamento{apptStats.confirmedToday === 1 ? '' : 's'} para hoje
                   </h1>
                 </div>
                 <div className="aa-stats-actions">
@@ -246,23 +262,23 @@ export default function AppLayout() {
 
               <div className="aa-kpis">
                 <div className="aa-kpi">
-                  <div className="aa-kpi-label">Agendados pelo assistente</div>
-                  <div className="aa-kpi-value">{stats.total}</div>
-                  {stats.total > 0 && (
+                  <div className="aa-kpi-label">Agendados pelo assistente hoje</div>
+                  <div className="aa-kpi-value">{apptStats.assistantToday}</div>
+                  {apptStats.assistantToday > 0 && (
                     <div className="aa-kpi-trend up">
-                      <TrendingUp size={12} /> em andamento
+                      <TrendingUp size={12} /> confirmados pelo WhatsApp
                     </div>
                   )}
                 </div>
                 <div className="aa-kpi">
-                  <div className="aa-kpi-label">Comparecimento</div>
+                  <div className="aa-kpi-label">Comparecimento (7 dias)</div>
                   <div className="aa-kpi-value">
                     {attendanceRate !== null ? `${attendanceRate}%` : '—'}
                   </div>
                 </div>
                 <div className="aa-kpi">
-                  <div className="aa-kpi-label">Faltas</div>
-                  <div className="aa-kpi-value">{stats.missed}</div>
+                  <div className="aa-kpi-label">Faltas (7 dias)</div>
+                  <div className="aa-kpi-value">{apptStats.missedWeek}</div>
                 </div>
               </div>
             </div>
@@ -299,28 +315,64 @@ export default function AppLayout() {
       {novoAgendamentoOpen && (
         <NovoAgendamentoModal
           onClose={() => setNovoAgendamentoOpen(false)}
-          onCreated={() => setNovoAgendamentoOpen(false)}
+          onCreated={loadStats}
         />
       )}
 
       {/* ══ MOBILE BOTTOM NAV ══ */}
       <nav className="aa-mobile-nav safe-bottom">
         {([
-          { id: 'agenda' as const,  Icon: CalendarDays,  label: 'Agenda'    },
-          { id: 'wa' as const,      Icon: MessageCircle, label: 'Conversas' },
-          { id: 'metrics' as const, Icon: BarChart2,     label: 'Métricas'  },
-          { id: 'ajustes' as const, Icon: Settings,      label: 'Ajustes'   },
+          { id: 'agenda',    Icon: CalendarDays,  label: 'Agenda',    onClick: () => goToSection('agenda') },
+          { id: 'aovivo',    Icon: Bot,           label: 'Ao vivo',   onClick: () => { setMobileLive(true); setMoreOpen(false) } },
+          { id: 'conversas', Icon: MessageCircle, label: 'Conversas', onClick: () => goToSection('conversas'), badge: approvalCount },
+          { id: 'metricas',  Icon: BarChart2,     label: 'Métricas',  onClick: () => goToSection('metricas') },
+          { id: 'mais',      Icon: Menu,          label: 'Mais',      onClick: () => setMoreOpen(true) },
         ]).map(tab => (
           <button key={tab.id}
-            className={`aa-mobile-tab ${mobileTab === tab.id ? 'active' : ''}`}
-            onClick={() => setMobileTab(tab.id)}
+            className={`aa-mobile-tab ${activeMobileTab === tab.id ? 'active' : ''}`}
+            onClick={tab.onClick}
           >
-            <tab.Icon size={21} strokeWidth={mobileTab === tab.id ? 2.25 : 1.75} />
+            <span className="aa-nav-icon-wrap">
+              <tab.Icon size={21} strokeWidth={activeMobileTab === tab.id ? 2.25 : 1.75} />
+              {!!tab.badge && tab.badge > 0 && <span className="aa-nav-badge">{tab.badge}</span>}
+            </span>
             <span>{tab.label}</span>
-            {mobileTab === tab.id && <span className="aa-mobile-dot" />}
+            {activeMobileTab === tab.id && <span className="aa-mobile-dot" />}
           </button>
         ))}
       </nav>
+
+      {/* ══ MOBILE "MAIS" SHEET ══ */}
+      {moreOpen && (
+        <div className="aa-sheet-backdrop" onClick={() => setMoreOpen(false)}>
+          <div className="aa-sheet safe-bottom" onClick={e => e.stopPropagation()}>
+            <div className="aa-sheet-handle" />
+            {([
+              { id: 'clientes',      Icon: Users,     label: 'Clientes' },
+              { id: 'profissionais', Icon: Briefcase, label: 'Profissionais' },
+              { id: 'ajustes',       Icon: Settings,  label: 'Ajustes' },
+            ] as const).map(item => (
+              <button key={item.id}
+                className={`aa-sheet-item ${!mobileLive && section === item.id ? 'active' : ''}`}
+                onClick={() => goToSection(item.id)}
+              >
+                <item.Icon size={18} /> {item.label}
+              </button>
+            ))}
+            <div className="aa-sheet-sep" />
+            <button className="aa-sheet-item" onClick={() => { setMoreOpen(false); setProfilesOpen(true) }}>
+              <SlidersHorizontal size={18} /> Perfis
+            </button>
+            <button className="aa-sheet-item" onClick={toggleTheme}>
+              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              {theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
+            </button>
+            <button className="aa-sheet-item danger" onClick={handleLogout}>
+              <LogOut size={18} /> Sair
+            </button>
+          </div>
+        </div>
+      )}
 
       <style>{`
         /* ── Layout shell ── */
@@ -517,6 +569,35 @@ export default function AppLayout() {
           width: 4px; height: 4px; border-radius: 50%; background: var(--accent);
         }
 
+        /* ── Mobile "Mais" sheet ── */
+        .aa-sheet-backdrop {
+          position: fixed; inset: 0; z-index: 40;
+          background: rgba(0,0,0,.45);
+          display: flex; align-items: flex-end;
+        }
+        .aa-sheet {
+          width: 100%; background: var(--panel);
+          border-top-left-radius: 16px; border-top-right-radius: 16px;
+          border-top: 1px solid var(--border);
+          padding: 8px 12px 12px; display: flex; flex-direction: column; gap: 2px;
+          box-shadow: var(--shadow-pop);
+          animation: sheet-in .18s ease-out;
+        }
+        .aa-sheet-handle {
+          width: 36px; height: 4px; border-radius: 2px; background: var(--border);
+          margin: 2px auto 10px;
+        }
+        .aa-sheet-item {
+          display: flex; align-items: center; gap: 12px;
+          padding: 12px; border-radius: 10px; border: none; background: none;
+          color: var(--foreground); font-size: 15px; font-weight: 500; text-align: left; cursor: pointer;
+        }
+        .aa-sheet-item:active, .aa-sheet-item.active { background: var(--card); }
+        .aa-sheet-item.active { color: var(--accent); font-weight: 700; }
+        .aa-sheet-item.danger { color: var(--red); }
+        .aa-sheet-sep { height: 1px; background: var(--border); margin: 6px 4px; }
+        @keyframes sheet-in { from { transform: translateY(100%) } to { transform: none } }
+
         /* ── Animations ── */
         @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.85)} }
 
@@ -538,6 +619,8 @@ export default function AppLayout() {
         @media (max-width: 767px) {
           .aa-sidebar, .aa-wa-panel { display: none; }
           .aa-mobile-nav { display: flex; }
+          .aa-layout.mobile-live .aa-main { display: none; }
+          .aa-layout.mobile-live .aa-wa-panel { display: flex; width: 100%; border-left: none; }
           .aa-stats-header { padding: 12px 16px 0; }
           .aa-hero-stat { font-size: 18px; }
         }

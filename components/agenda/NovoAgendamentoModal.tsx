@@ -11,11 +11,14 @@ interface Props {
 
 type Step = 'paciente' | 'detalhes' | 'confirmacao'
 
-function toLocalISO(date: string, time: string): string {
-  // date: "YYYY-MM-DD", time: "HH:MM" → UTC ISO string (Brasília = UTC-3)
-  const local = new Date(`${date}T${time}:00`)
-  const utc   = new Date(local.getTime() + 3 * 60 * 60 * 1000)
-  return utc.toISOString()
+// scheduled_at guarda a hora de Brasília marcada como UTC (15h → "T15:00:00Z")
+function toScheduledAt(date: string, time: string): string {
+  return `${date}T${time}:00Z`
+}
+
+function localToday(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
 function fmtDate(d: string) {
@@ -37,7 +40,7 @@ export default function NovoAgendamentoModal({ onClose, onCreated }: Props) {
   // Detalhes
   const [doctors, setDoctors] = useState<Doctor[]>([])
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null)
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(localToday)
   const [time, setTime] = useState('09:00')
   const [type, setType] = useState('')
 
@@ -65,7 +68,7 @@ export default function NovoAgendamentoModal({ onClose, onCreated }: Props) {
     if (!selectedPatient || !selectedDoctor || !date || !time) return
     setSaving(true); setError(null)
     try {
-      const scheduledAt = toLocalISO(date, time)
+      const scheduledAt = toScheduledAt(date, time)
       const { error: err } = await supabase.from('appointments').insert({
         patient_id:   selectedPatient.id,
         doctor_id:    selectedDoctor.id,
@@ -252,7 +255,7 @@ export default function NovoAgendamentoModal({ onClose, onCreated }: Props) {
                   <input
                     type="date"
                     value={date}
-                    min={new Date().toISOString().slice(0, 10)}
+                    min={localToday()}
                     onChange={e => setDate(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg text-sm border outline-none"
                     style={{ background: 'var(--surface-sunken)', borderColor: 'var(--line)', color: 'var(--ink)' }}
