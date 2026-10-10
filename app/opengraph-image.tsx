@@ -45,7 +45,7 @@ export default function Image() {
               Agendamentos que acontecem sozinhos
             </div>
             <div style={{ fontSize: 28, lineHeight: 1.35, color: INK_MUTED }}>
-              IA que agenda pelo WhatsApp 24h para clínicas, consultórios e negócios de serviço.
+              IA que agenda pelo WhatsApp 24h para clínicas, salões, barbearias e todo negócio com agenda.
             </div>
           </div>
 

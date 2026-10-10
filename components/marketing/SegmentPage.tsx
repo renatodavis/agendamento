@@ -100,6 +100,9 @@ export default function SegmentPage({ segment: s }: { segment: Segment }) {
       <section className="mk-section">
         <div className="mk-wrap">
           <h2>Também atendemos</h2>
+          <p className="mk-section-sub">
+            E outros negócios com hora marcada. <Link href="/segmentos">Veja todos os segmentos</Link>.
+          </p>
           <div className="mk-grid">
             {others.map(o => (
               <Link key={o.slug} href={`/${o.slug}`} className="mk-card">

@@ -1,32 +1,32 @@
 import Link from 'next/link'
 import {
   MessageCircle, CalendarCheck, LayoutDashboard, Clock, CalendarDays, BellRing,
-  Mic, RefreshCw, ShieldCheck, Hourglass, CheckCircle2,
+  Mic, RefreshCw, ShieldCheck, Hourglass, CheckCircle2, Settings2,
 } from 'lucide-react'
 import MarketingShell, { DemoButton } from '@/components/marketing/MarketingShell'
-import { SEGMENTS } from '@/lib/segments'
+import { NICHE_GROUPS } from '@/lib/niches'
 import AuthRedirect from './AuthRedirect'
 
 const STEPS = [
-  { Icon: MessageCircle, title: 'O paciente manda mensagem', text: 'Em linguagem natural, pelo WhatsApp da clínica: "quero marcar para sexta" ou "tem vaga essa semana?".' },
+  { Icon: MessageCircle, title: 'O cliente manda mensagem', text: 'Em linguagem natural, pelo WhatsApp do seu negócio: "quero marcar para sexta" ou "tem vaga essa semana?".' },
   { Icon: CalendarCheck, title: 'A IA oferece horários', text: 'O assistente consulta a agenda de cada profissional, oferece os horários livres e pede confirmação.' },
-  { Icon: LayoutDashboard, title: 'A agenda se atualiza', text: 'Com o SIM do paciente, o agendamento aparece no painel. Na véspera, ele recebe um lembrete.' },
+  { Icon: LayoutDashboard, title: 'A agenda se atualiza', text: 'Com o SIM do cliente, o agendamento aparece no painel. Na véspera, ele recebe um lembrete.' },
 ]
 
 const FEATURES = [
   { Icon: MessageCircle, title: 'Linguagem natural', text: 'Entende "quinta de manhã" ou "amanhã à tarde", sem menus numerados.' },
-  { Icon: CalendarDays, title: 'Agenda em tempo real', text: 'Cada profissional com seus horários e bloqueios. Nenhum horário é oferecido duas vezes.' },
-  { Icon: BellRing, title: 'Confirmação e lembrete', text: 'O agendamento só vale com o SIM do paciente, e o lembrete sai na véspera.' },
-  { Icon: Hourglass, title: 'Fila de espera', text: 'Horário ocupado? O paciente entra na fila em vez de desistir.' },
+  { Icon: CalendarDays, title: 'Agenda em tempo real', text: 'Cada profissional com seus serviços, horários e bloqueios. Nenhum horário é oferecido duas vezes.' },
+  { Icon: BellRing, title: 'Confirmação e lembrete', text: 'O agendamento só vale com o SIM do cliente, e o lembrete sai na véspera.' },
+  { Icon: Hourglass, title: 'Fila de espera', text: 'Horário ocupado? O cliente entra na fila em vez de desistir.' },
   { Icon: Mic, title: 'Entende áudios', text: 'Mensagens de voz são transcritas e respondidas normalmente.' },
-  { Icon: RefreshCw, title: 'Remarcação assistida', text: 'Se o profissional bloquear um dia, o sistema ajuda a contatar os pacientes e sugerir novos horários.' },
-  { Icon: ShieldCheck, title: 'A recepção decide as exceções', text: 'Cancelamentos e remarcações chegam ao painel para aprovação com um toque.' },
-  { Icon: LayoutDashboard, title: 'Painel de gestão', text: 'Agenda do dia, conversas ao vivo, aprovações, comparecimento e faltas em um só lugar.' },
+  { Icon: RefreshCw, title: 'Remarcação assistida', text: 'Se o profissional bloquear um dia, o sistema ajuda a contatar os clientes e sugerir novos horários.' },
+  { Icon: ShieldCheck, title: 'Sua equipe decide as exceções', text: 'Cancelamentos e remarcações chegam ao painel para aprovação com um toque.' },
+  { Icon: Settings2, title: 'Fala a língua do seu negócio', text: 'Paciente ou cliente, consulta ou atendimento: o vocabulário se adapta ao seu tipo de negócio.' },
 ]
 
 const HIGHLIGHTS = [
   { value: '24h', label: 'atendimento no WhatsApp, inclusive à noite e no fim de semana' },
-  { value: 'SIM', label: 'o agendamento só entra na agenda com a confirmação do paciente' },
+  { value: 'SIM', label: 'o agendamento só entra na agenda com a confirmação do cliente' },
   { value: 'Véspera', label: 'lembrete automático com opção de confirmar ou remarcar' },
 ]
 
@@ -39,12 +39,12 @@ export default function LandingPage() {
         <div className="mk-wrap mk-hero-grid">
           <div>
             <h1 className="lp-h1">
-              <span className="mk-kicker">Agendamento pelo WhatsApp com IA para clínicas</span>
+              <span className="mk-kicker">Agendamento automático pelo WhatsApp com IA</span>
               <span className="lp-h1-main">Agendamentos que <em>acontecem sozinhos</em></span>
             </h1>
             <p className="mk-lead">
-              Seu paciente manda uma mensagem. A IA entende, consulta a agenda, confirma e lembra na véspera.
-              A recepção só cuida das exceções.
+              Para clínicas, salões, barbearias e todo negócio que vive de agenda. Seu cliente manda uma mensagem;
+              a IA entende, consulta a agenda, confirma e lembra na véspera. Sua equipe só cuida das exceções.
             </p>
             <div className="mk-actions">
               <DemoButton />
@@ -61,14 +61,14 @@ export default function LandingPage() {
               </div>
             </div>
             <div className="lp-phone-body">
-              <div className="mk-bubble out">Oi, preciso marcar com o Dr. Silva</div>
-              <div className="mk-bubble in">Olá! O Dr. Silva tem horários amanhã: 10h, 14h30 ou 16h. Qual prefere?</div>
-              <div className="mk-bubble out">10h</div>
-              <div className="mk-bubble in">Consulta com o Dr. Silva amanhã às 10h. Responda SIM para confirmar.</div>
+              <div className="mk-bubble out">Oi! Tem horário amanhã com a Carla?</div>
+              <div className="mk-bubble in">Olá! A Carla tem amanhã às 10h, 14h30 ou 16h. Qual prefere?</div>
+              <div className="mk-bubble out">10h, pra corte e escova</div>
+              <div className="mk-bubble in">Corte e escova com a Carla amanhã às 10h. Responda SIM para confirmar.</div>
               <div className="mk-bubble out">SIM</div>
               <div className="lp-confirm">
-                <div className="lp-confirm-title"><CheckCircle2 size={16} /> Consulta confirmada</div>
-                <div>Dr. Silva · Clínico geral</div>
+                <div className="lp-confirm-title"><CheckCircle2 size={16} /> Agendamento confirmado</div>
+                <div>Carla · Corte e escova</div>
                 <div>Amanhã, 10h00</div>
               </div>
             </div>
@@ -89,8 +89,8 @@ export default function LandingPage() {
 
       <section className="mk-section" id="como-funciona">
         <div className="mk-wrap">
-          <h2>Três passos. A recepção só cuida das exceções.</h2>
-          <p className="mk-section-sub">O agendamento inteiro acontece no WhatsApp que o paciente já usa.</p>
+          <h2>Três passos. Sua equipe só cuida das exceções.</h2>
+          <p className="mk-section-sub">O agendamento inteiro acontece no WhatsApp que o cliente já usa.</p>
           <ol className="lp-steps">
             {STEPS.map(({ Icon, title, text }, i) => (
               <li key={title} className="mk-card">
@@ -109,7 +109,7 @@ export default function LandingPage() {
       <section className="mk-section lp-tinted" id="funcionalidades">
         <div className="mk-wrap">
           <h2>Tudo que a recepção faz no WhatsApp, em automático</h2>
-          <p className="mk-section-sub">A inteligência artificial conversa com o paciente. A equipe mantém o controle pelo painel.</p>
+          <p className="mk-section-sub">A inteligência artificial conversa com o cliente. A equipe mantém o controle pelo painel.</p>
           <div className="lp-features">
             {FEATURES.map(({ Icon, title, text }) => (
               <div key={title} className="lp-feature">
@@ -127,19 +127,25 @@ export default function LandingPage() {
       <section className="mk-section" id="negocios">
         <div className="mk-wrap">
           <h2>Feito para quem vive de agenda</h2>
-          <p className="mk-section-sub">Veja como o assistente funciona no seu tipo de negócio.</p>
+          <p className="mk-section-sub">Se o seu negócio atende com hora marcada, o assistente se adapta a ele.</p>
           <div className="mk-grid">
-            {SEGMENTS.map(s => (
-              <Link key={s.slug} href={`/${s.slug}`} className="mk-card lp-segment">
-                <span className="lp-segment-kicker">{s.kicker}</span>
-                <h3>{s.title}</h3>
-                <p>{s.description}</p>
-                <span className="lp-segment-more">Ver detalhes →</span>
-              </Link>
+            {NICHE_GROUPS.map(g => (
+              <div key={g.title} className="mk-card lp-segment">
+                <span className="lp-segment-kicker">{g.title}</span>
+                <p>{g.intro}</p>
+                <ul className="lp-niche-list">
+                  {g.niches.map(n => (
+                    <li key={n.name}>
+                      {n.href ? <Link href={n.href}>{n.name}</Link> : n.name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             ))}
           </div>
           <p className="lp-also">
-            <Clock size={15} aria-hidden="true" /> Também atende salões de beleza, barbearias, veterinárias e outros serviços com agenda.
+            <Clock size={15} aria-hidden="true" />
+            <span>Seu negócio não está na lista? <Link href="/segmentos">Veja todos os segmentos e quando o assistente se encaixa</Link></span>
           </p>
         </div>
       </section>
@@ -214,8 +220,13 @@ export default function LandingPage() {
         .lp-segment { display: flex; flex-direction: column; gap: 6px; }
         .lp-segment h3 { margin: 0; }
         .lp-segment-kicker { font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--brand-ink); }
-        .lp-segment-more { margin-top: auto; padding-top: 8px; font-weight: 700; font-size: 14px; color: var(--brand); }
-        .lp-also { display: flex; align-items: center; gap: 8px; color: var(--ink-muted); font-size: 15px; margin: 20px 0 0; }
+        .lp-niche-list { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 6px; font-size: 15px; }
+        .lp-niche-list li { padding-left: 16px; position: relative; color: var(--ink); }
+        .lp-niche-list li::before { content: ''; position: absolute; left: 0; top: .62em; width: 6px; height: 6px; border-radius: 50%; background: var(--brand); }
+        .lp-niche-list a { color: var(--brand); font-weight: 600; }
+        .lp-also { display: flex; align-items: flex-start; gap: 8px; color: var(--ink-muted); font-size: 15px; margin: 20px 0 0; }
+        .lp-also svg:first-child { flex-shrink: 0; margin-top: 4px; }
+        .lp-also a { color: var(--brand); font-weight: 600; }
 
         .lp-btn-on-dark { border: 1px solid color-mix(in srgb, var(--ink-inverse) 40%, transparent); color: var(--ink-inverse) !important; }
 

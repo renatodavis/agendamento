@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { DEMO_CTA, SEGMENT_LINKS, CONTENT_LINKS, LEGAL } from '@/lib/site'
+import { DEMO_CTA, SEGMENT_LINKS, CONTENT_LINKS, NAV_LINKS, LEGAL } from '@/lib/site'
 
 export function DemoButton({ className = 'mk-btn mk-btn-primary' }: { className?: string }) {
   return DEMO_CTA.external
@@ -36,8 +36,7 @@ export default function MarketingShell({ children }: { children: React.ReactNode
         <div className="mk-header-inner">
           <Link href="/" className="mk-logo">Agenda<span>Agentic</span></Link>
           <nav className="mk-nav" aria-label="Principal">
-            {SEGMENT_LINKS.map(l => <Link key={l.href} href={l.href}>{l.label}</Link>)}
-            {CONTENT_LINKS.map(l => <Link key={l.href} href={l.href}>{l.label}</Link>)}
+            {NAV_LINKS.map(l => <Link key={l.href} href={l.href}>{l.label}</Link>)}
           </nav>
           <DemoButton className="mk-btn mk-btn-primary mk-btn-sm" />
         </div>
@@ -49,11 +48,12 @@ export default function MarketingShell({ children }: { children: React.ReactNode
         <div className="mk-footer-inner">
           <div>
             <Link href="/" className="mk-logo">Agenda<span>Agentic</span></Link>
-            <p>Agendamento pelo WhatsApp com inteligência artificial.</p>
+            <p>Agendamento pelo WhatsApp com inteligência artificial para negócios com agenda.</p>
           </div>
           <div>
-            <h2>Soluções</h2>
+            <h2>Segmentos</h2>
             {SEGMENT_LINKS.map(l => <Link key={l.href} href={l.href}>{l.label}</Link>)}
+            <Link href="/segmentos">Todos os segmentos</Link>
           </div>
           <div>
             <h2>Conteúdo</h2>
@@ -78,6 +78,8 @@ export default function MarketingShell({ children }: { children: React.ReactNode
           font-family: var(--font-bricolage), system-ui, sans-serif; line-height: 1.15; text-wrap: balance;
         }
         .mk-root a { color: inherit; }
+        .mk-root p a, .mk-root li a { color: var(--brand); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+        .mk-root p a:hover, .mk-root li a:hover { text-decoration-thickness: 2px; }
         .mk-wrap { max-width: 1080px; margin: 0 auto; padding-inline: 20px; }
         .mk-narrow { max-width: 720px; margin: 0 auto; padding-inline: 20px; }
 

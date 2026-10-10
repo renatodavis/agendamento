@@ -8,6 +8,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const latestPost = POSTS.map(p => p.dateModified).sort().at(-1)
   return [
     { url: SITE_URL, lastModified: '2026-10-10' },
+    { url: `${SITE_URL}/segmentos`, lastModified: '2026-10-10' },
     ...SEGMENTS.map(s => ({ url: `${SITE_URL}/${s.slug}`, lastModified: s.lastModified })),
     { url: `${SITE_URL}/perguntas-frequentes`, lastModified: '2026-10-10' },
     { url: `${SITE_URL}/blog`, lastModified: latestPost },

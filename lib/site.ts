@@ -1,9 +1,9 @@
 export const SITE_URL = 'https://www.agendaagentic.app'
 export const SITE_NAME = 'AgendaAgentic'
 
-export const HOME_TITLE = 'Agendamento pelo WhatsApp com IA para clínicas | AgendaAgentic'
+export const HOME_TITLE = 'Agendamento automático pelo WhatsApp com IA | AgendaAgentic'
 export const HOME_DESCRIPTION =
-  'IA que agenda pelo WhatsApp 24h: consulta a agenda real, confirma com o paciente e libera a recepção. Para clínicas, consultórios e negócios de serviço.'
+  'IA que agenda pelo WhatsApp 24h: consulta a agenda real, confirma com o cliente e lembra na véspera. Para clínicas, salões, barbearias e todo negócio com agenda.'
 
 // openGraph de uma página substitui o do layout por inteiro, então cada página monta o objeto completo
 export function openGraphFor(path: string, title: string, description: string, extra: Record<string, unknown> = {}) {
@@ -38,6 +38,12 @@ export const SEGMENT_LINKS = [
   { href: '/dentistas', label: 'Dentistas' },
   { href: '/clinicas-de-estetica', label: 'Clínicas de estética' },
   { href: '/consultorios-medicos', label: 'Consultórios médicos' },
+]
+
+export const NAV_LINKS = [
+  { href: '/segmentos', label: 'Segmentos' },
+  { href: '/perguntas-frequentes', label: 'Perguntas frequentes' },
+  { href: '/blog', label: 'Blog' },
 ]
 
 export const CONTENT_LINKS = [
