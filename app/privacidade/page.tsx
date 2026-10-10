@@ -1,11 +1,12 @@
 import type { Metadata } from 'next'
 import LegalPage from '@/components/legal/LegalPage'
-import { LEGAL } from '@/lib/site'
+import { LEGAL, openGraphFor } from '@/lib/site'
 
 export const metadata: Metadata = {
   title: 'Política de Privacidade',
   description: 'Como o AgendaAgentic trata dados pessoais de clínicas, usuários e pacientes, em conformidade com a LGPD.',
   alternates: { canonical: '/privacidade' },
+  openGraph: openGraphFor('/privacidade', 'Política de Privacidade', 'Como o AgendaAgentic trata dados pessoais, em conformidade com a LGPD.'),
   robots: LEGAL.ready ? undefined : { index: false, follow: true },
 }
 

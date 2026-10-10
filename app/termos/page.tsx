@@ -1,12 +1,13 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import LegalPage from '@/components/legal/LegalPage'
-import { LEGAL } from '@/lib/site'
+import { LEGAL, openGraphFor } from '@/lib/site'
 
 export const metadata: Metadata = {
   title: 'Termos de Uso',
   description: 'Condições de uso do AgendaAgentic, o assistente de agendamento pelo WhatsApp com inteligência artificial.',
   alternates: { canonical: '/termos' },
+  openGraph: openGraphFor('/termos', 'Termos de Uso', 'Condições de uso do AgendaAgentic.'),
   robots: LEGAL.ready ? undefined : { index: false, follow: true },
 }
 

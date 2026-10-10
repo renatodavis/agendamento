@@ -2,7 +2,7 @@
 import { useEffect } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
-import { LEGAL } from '@/lib/site'
+import { LEGAL, DEMO_CTA, SEGMENT_LINKS, CONTENT_LINKS } from '@/lib/site'
 
 export default function LandingPage() {
   const router = useRouter()
@@ -43,7 +43,10 @@ export default function LandingPage() {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  function goLogin() { router.push('/login') }
+  function goLogin() {
+    if (DEMO_CTA.external) window.open(DEMO_CTA.href, '_blank', 'noopener,noreferrer')
+    else router.push('/login')
+  }
 
   return (
     <>
@@ -299,6 +302,7 @@ export default function LandingPage() {
           transition: border-color .2s, background .2s;
         }
         .aa-domain:hover { border-color: rgba(37,211,102,.35); background: rgba(37,211,102,.05); }
+        .aa-domain-link { display: block; cursor: pointer; }
         .aa-domain-emoji { font-size: 1.75rem; margin-bottom: 9px; line-height: 1; }
         .aa-domain-name  { color: var(--hero-t); font-size: .88rem; font-weight: 600; margin-bottom: 3px; }
         .aa-domain-desc  { color: var(--hero-t2); font-size: .73rem; }
@@ -337,6 +341,8 @@ export default function LandingPage() {
               <li><a href="#como-funciona" onClick={e => { e.preventDefault(); scrollTo('como-funciona') }}>Como funciona</a></li>
               <li><a href="#funcionalidades" onClick={e => { e.preventDefault(); scrollTo('funcionalidades') }}>Funcionalidades</a></li>
               <li><a href="#negocios" onClick={e => { e.preventDefault(); scrollTo('negocios') }}>Negócios</a></li>
+              <li><a href="/perguntas-frequentes">Perguntas</a></li>
+              <li><a href="/blog">Blog</a></li>
             </ul>
             <button className="aa-nav-cta" onClick={goLogin}>Começar agora</button>
           </div>
@@ -471,19 +477,22 @@ export default function LandingPage() {
             </div>
             <div className="aa-domains">
               {[
-                { emoji: '🏥', name: 'Clínicas médicas',   desc: 'Consultas, retornos e triagem' },
-                { emoji: '💈', name: 'Barbearias',         desc: 'Cortes, barbas, horários fixos' },
-                { emoji: '💅', name: 'Salões de beleza',   desc: 'Serviços por profissional' },
-                { emoji: '🦷', name: 'Odontologia',        desc: 'Procedimentos e retornos' },
-                { emoji: '🐾', name: 'Veterinárias',       desc: 'Consultas e vacinas' },
-                { emoji: '🏋️', name: 'Personal / Academia', desc: 'Sessões e aulas coletivas' },
-              ].map(({ emoji, name, desc }, i) => (
-                <div key={i} className="aa-domain aa-card-anim">
-                  <div className="aa-domain-emoji">{emoji}</div>
+                { emoji: '🏥', name: 'Consultórios médicos', desc: 'Consultas e retornos', href: '/consultorios-medicos' },
+                { emoji: '🦷', name: 'Odontologia',          desc: 'Avaliações e procedimentos', href: '/dentistas' },
+                { emoji: '✨', name: 'Clínicas de estética', desc: 'Procedimentos por profissional', href: '/clinicas-de-estetica' },
+                { emoji: '💅', name: 'Salões de beleza',     desc: 'Serviços por profissional' },
+                { emoji: '💈', name: 'Barbearias',           desc: 'Cortes, barbas, horários fixos' },
+                { emoji: '🐾', name: 'Veterinárias',         desc: 'Consultas e vacinas' },
+              ].map(({ emoji, name, desc, href }) => {
+                const inner = <>
+                  <div className="aa-domain-emoji" aria-hidden="true">{emoji}</div>
                   <div className="aa-domain-name">{name}</div>
                   <div className="aa-domain-desc">{desc}</div>
-                </div>
-              ))}
+                </>
+                return href
+                  ? <a key={name} href={href} className="aa-domain aa-domain-link aa-card-anim">{inner}</a>
+                  : <div key={name} className="aa-domain aa-card-anim">{inner}</div>
+              })}
             </div>
           </div>
         </section>
@@ -493,7 +502,14 @@ export default function LandingPage() {
           <h2>Pronto para automatizar seus agendamentos?</h2>
           <p>Configure em minutos. Sem contratos de longo prazo. Cancele quando quiser.</p>
           <div className="aa-cta-actions">
-            <a href="/login" className="aa-btn aa-btn-primary" style={{ textDecoration: 'none' }}>Acessar o sistema</a>
+            <a
+              href={DEMO_CTA.href}
+              className="aa-btn aa-btn-primary"
+              style={{ textDecoration: 'none' }}
+              {...(DEMO_CTA.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+            >
+              {DEMO_CTA.label}
+            </a>
           </div>
         </section>
 
@@ -501,13 +517,13 @@ export default function LandingPage() {
         <footer className="aa-footer">
           <div className="aa-footer-logo">Agenda<span>Agentic</span></div>
           <p>Agendamento inteligente via WhatsApp</p>
-          {LEGAL.ready && (
-            <nav className="aa-footer-links" aria-label="Links institucionais">
+          <nav className="aa-footer-links" aria-label="Rodapé">
+            {[...SEGMENT_LINKS, ...CONTENT_LINKS].map(l => <a key={l.href} href={l.href}>{l.label}</a>)}
+            {LEGAL.ready && <>
               <a href="/privacidade">Política de Privacidade</a>
               <a href="/termos">Termos de Uso</a>
-              <a href={`mailto:${LEGAL.emailContato}`}>{LEGAL.emailContato}</a>
-            </nav>
-          )}
+            </>}
+          </nav>
         </footer>
       </div>
     </>

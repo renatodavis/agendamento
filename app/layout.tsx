@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { Bricolage_Grotesque, Figtree, DM_Mono } from 'next/font/google'
-import { SITE_URL, SITE_NAME, HOME_DESCRIPTION } from '@/lib/site'
+import { SITE_URL, SITE_NAME, HOME_TITLE, HOME_DESCRIPTION, openGraphFor } from '@/lib/site'
 import './globals.css'
 
 const bricolage = Bricolage_Grotesque({
@@ -28,11 +28,7 @@ export const metadata: Metadata = {
   },
   description: HOME_DESCRIPTION,
   applicationName: SITE_NAME,
-  openGraph: {
-    type: 'website',
-    siteName: SITE_NAME,
-    locale: 'pt_BR',
-  },
+  openGraph: openGraphFor('/', HOME_TITLE, HOME_DESCRIPTION),
   twitter: { card: 'summary_large_image' },
   ...(process.env.GOOGLE_SITE_VERIFICATION
     ? { verification: { google: process.env.GOOGLE_SITE_VERIFICATION } }

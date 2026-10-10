@@ -1,12 +1,12 @@
 import type { Metadata } from 'next'
 import LandingPage from '@/components/landing/LandingPage'
-import { SITE_URL, SITE_NAME, HOME_TITLE, HOME_DESCRIPTION } from '@/lib/site'
+import { SITE_URL, SITE_NAME, HOME_TITLE, HOME_DESCRIPTION, openGraphFor } from '@/lib/site'
 
 export const metadata: Metadata = {
   title: { absolute: HOME_TITLE },
   description: HOME_DESCRIPTION,
   alternates: { canonical: '/' },
-  openGraph: { url: '/', title: HOME_TITLE, description: HOME_DESCRIPTION },
+  openGraph: openGraphFor('/', HOME_TITLE, HOME_DESCRIPTION),
 }
 
 const jsonLd = {
