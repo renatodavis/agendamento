@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { Bricolage_Grotesque, Figtree, DM_Mono } from 'next/font/google'
-import { getClinicBasicConfig } from '@/lib/clinic-config-server'
+import { SITE_URL, SITE_NAME, HOME_DESCRIPTION } from '@/lib/site'
 import './globals.css'
 
 const bricolage = Bricolage_Grotesque({
@@ -20,13 +20,23 @@ const dmMono = DM_Mono({
   weight: ['400', '500'],
 })
 
-export async function generateMetadata(): Promise<Metadata> {
-  const { clinicName } = await getClinicBasicConfig()
-  const isDefaultName = !clinicName || clinicName === 'AgendaAgentic'
-  return {
-    title: isDefaultName ? 'AgendaAgentic' : `${clinicName} · AgendaAgentic`,
-    description: 'Sistema de agendamento inteligente via WhatsApp com IA',
-  }
+export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: `${SITE_NAME} — Agendamento pelo WhatsApp com IA`,
+    template: `%s | ${SITE_NAME}`,
+  },
+  description: HOME_DESCRIPTION,
+  applicationName: SITE_NAME,
+  openGraph: {
+    type: 'website',
+    siteName: SITE_NAME,
+    locale: 'pt_BR',
+  },
+  twitter: { card: 'summary_large_image' },
+  ...(process.env.GOOGLE_SITE_VERIFICATION
+    ? { verification: { google: process.env.GOOGLE_SITE_VERIFICATION } }
+    : {}),
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
