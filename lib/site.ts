@@ -38,6 +38,8 @@ export const SEGMENT_LINKS = [
   { href: '/dentistas', label: 'Dentistas' },
   { href: '/clinicas-de-estetica', label: 'Clínicas de estética' },
   { href: '/consultorios-medicos', label: 'Consultórios médicos' },
+  { href: '/saloes-de-beleza', label: 'Salões de beleza' },
+  { href: '/barbearias', label: 'Barbearias' },
 ]
 
 export const NAV_LINKS = [

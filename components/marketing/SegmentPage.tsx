@@ -6,7 +6,9 @@ import { SITE_URL, SITE_NAME } from '@/lib/site'
 
 export default function SegmentPage({ segment: s }: { segment: Segment }) {
   const url = `${SITE_URL}/${s.slug}`
-  const others = SEGMENTS.filter(o => o.slug !== s.slug)
+  const others = SEGMENTS
+    .filter(o => o.slug !== s.slug)
+    .sort((a, b) => Number(b.group === s.group) - Number(a.group === s.group))
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -51,7 +53,7 @@ export default function SegmentPage({ segment: s }: { segment: Segment }) {
           <div className="mk-chat" aria-label={s.chatTitle}>
             <div className="mk-chat-title">{s.chatTitle}</div>
             {s.chat.map((m, i) => (
-              <div key={i} className={`mk-bubble ${m.from === 'paciente' ? 'out' : 'in'}`}>{m.text}</div>
+              <div key={i} className={`mk-bubble ${m.from === 'cliente' ? 'out' : 'in'}`}>{m.text}</div>
             ))}
           </div>
         </div>
@@ -60,7 +62,7 @@ export default function SegmentPage({ segment: s }: { segment: Segment }) {
       <section className="mk-section">
         <div className="mk-wrap">
           <h2>O que trava a agenda hoje</h2>
-          <p className="mk-section-sub">Problemas que o assistente resolve no dia a dia da recepção.</p>
+          <p className="mk-section-sub">Problemas que o assistente resolve no dia a dia do atendimento.</p>
           <div className="mk-grid">
             {s.pains.map(p => (
               <div key={p.title} className="mk-card"><h3>{p.title}</h3><p>{p.text}</p></div>

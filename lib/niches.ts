@@ -22,8 +22,8 @@ export const NICHE_GROUPS: NicheGroup[] = [
     title: 'Beleza e bem-estar',
     intro: 'Horários por profissional e por serviço, com resposta imediata para quem quer marcar agora.',
     niches: [
-      { name: 'Salões de beleza', text: 'Corte, escova, coloração e outros serviços, cada um com seu profissional.' },
-      { name: 'Barbearias', text: 'Corte e barba com o barbeiro preferido, inclusive no fim de semana.' },
+      { name: 'Salões de beleza', text: 'Corte, escova, coloração e outros serviços, cada um com seu profissional.', href: '/saloes-de-beleza' },
+      { name: 'Barbearias', text: 'Corte e barba com o barbeiro preferido, inclusive no fim de semana.', href: '/barbearias' },
       { name: 'Manicure e design de sobrancelhas', text: 'Atendimentos curtos com agenda cheia e muitas remarcações.' },
       { name: 'Massoterapia e spas', text: 'Sessões por terapeuta, com lembrete e confirmação.' },
     ],
