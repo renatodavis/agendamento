@@ -292,6 +292,17 @@ export default function AgendaBottomPanel({ view: panelView }: { view: AgendaSec
   }
 
   useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable) return
+      if (e.key === 'ArrowRight') { e.preventDefault(); setDayOffset(d => Math.min(30, d + 1)) }
+      if (e.key === 'ArrowLeft')  { e.preventDefault(); setDayOffset(d => Math.max(-1, d - 1)) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  useEffect(() => {
     if (selId && window.innerWidth <= 768) {
       requestAnimationFrame(() => detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
     }
