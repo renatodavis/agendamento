@@ -9,13 +9,14 @@ import NovoAgendamentoModal from '@/components/agenda/NovoAgendamentoModal'
 import { useApprovalCount } from '@/components/agenda/ApprovalPanel'
 import ProfilesPanel from '@/components/profiles/ProfilesPanel'
 import { useActiveProfile } from '@/lib/useActiveProfile'
+import RemindersPanel from '@/components/reminders/RemindersPanel'
 import {
   CalendarDays, MessageCircle, Users, Briefcase,
   BarChart2, Settings, LogOut, Bot, Plus, TrendingUp,
-  SlidersHorizontal, Sun, Moon, Menu,
+  SlidersHorizontal, Sun, Moon, Menu, Bell,
 } from 'lucide-react'
 
-type SidebarSection = 'agenda' | 'conversas' | 'clientes' | 'profissionais' | 'metricas' | 'ajustes'
+type SidebarSection = 'agenda' | 'conversas' | 'clientes' | 'profissionais' | 'lembretes' | 'metricas' | 'ajustes'
 
 function todayLabel() {
   return new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase()
@@ -135,6 +136,7 @@ export default function AppLayout() {
     conversas:     'approvals',
     clientes:      'contacts',
     profissionais: 'schedules',
+    lembretes:     'agenda',
     metricas:      'agenda',
     ajustes:       'config',
   }
@@ -144,6 +146,7 @@ export default function AppLayout() {
     { id: 'conversas',     Icon: MessageCircle, label: 'Conversas',    badge: approvalCount },
     { id: 'clientes',      Icon: Users,         label: 'Clientes' },
     { id: 'profissionais', Icon: Briefcase,     label: 'Profissionais' },
+    { id: 'lembretes',     Icon: Bell,          label: 'Lembretes' },
     { id: 'metricas',      Icon: BarChart2,     label: 'Métricas' },
     { id: 'ajustes',       Icon: Settings,      label: 'Ajustes' },
   ]
@@ -288,7 +291,9 @@ export default function AppLayout() {
 
           {/* Section content */}
           <div className="aa-section-content">
-            {section === 'metricas' ? (
+            {section === 'lembretes' ? (
+              <RemindersPanel />
+            ) : section === 'metricas' ? (
               <LogPanel entries={logEntries} stats={stats} onFetch={fetchAgentLog} />
             ) : (
               <AgendaBottomPanel view={agendaView[section]} />
@@ -349,6 +354,7 @@ export default function AppLayout() {
           <div className="aa-sheet safe-bottom" onClick={e => e.stopPropagation()}>
             <div className="aa-sheet-handle" />
             {([
+              { id: 'lembretes',     Icon: Bell,      label: 'Lembretes' },
               { id: 'metricas',      Icon: BarChart2, label: 'Métricas' },
               { id: 'clientes',      Icon: Users,     label: 'Clientes' },
               { id: 'profissionais', Icon: Briefcase, label: 'Profissionais' },
