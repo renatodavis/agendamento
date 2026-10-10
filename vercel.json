@@ -5,12 +5,17 @@
   "installCommand": "npm install",
   "functions": {
     "app/api/chat/route.ts": { "maxDuration": 60 },
-    "app/api/whatsapp/route.ts": { "maxDuration": 60 }
+    "app/api/whatsapp/route.ts": { "maxDuration": 60 },
+    "app/api/appointments/remind/route.ts": { "maxDuration": 60 }
   },
   "crons": [
     {
       "path": "/api/appointments/remind",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/appointments/remind",
+      "schedule": "0 21 * * *"
     }
   ]
 }
