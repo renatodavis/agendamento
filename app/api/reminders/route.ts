@@ -55,32 +55,31 @@ export async function GET() {
 
   const sentIds = new Set((confirmedRes.data ?? []).map((r: { record_id: string }) => r.record_id))
 
-  type Row = {
-    id: string; scheduled_at: string; status: string; type: string; reminder_sent_at: string | null;
-    patient: { name: string; phone: string } | null;
-    doctor: { name: string; specialty: string } | null;
-  }
-
-  function mapRow(r: Row) {
+  function mapRow(r: Record<string, unknown>) {
+    const patient = Array.isArray(r.patient) ? r.patient[0] : r.patient
+    const doctor = Array.isArray(r.doctor) ? r.doctor[0] : r.doctor
     return {
-      id: r.id,
-      scheduledAt: r.scheduled_at,
-      status: r.status,
-      type: r.type,
-      reminderSentAt: r.reminder_sent_at,
-      patientName: r.patient?.name ?? '—',
-      patientPhone: r.patient?.phone ?? '',
-      doctorName: r.doctor?.name ?? '—',
-      doctorSpecialty: r.doctor?.specialty ?? '',
+      id: r.id as string,
+      scheduledAt: r.scheduled_at as string,
+      status: r.status as string,
+      type: r.type as string,
+      reminderSentAt: r.reminder_sent_at as string | null,
+      patientName: (patient as { name?: string } | null)?.name ?? '—',
+      patientPhone: (patient as { phone?: string } | null)?.phone ?? '',
+      doctorName: (doctor as { name?: string } | null)?.name ?? '—',
+      doctorSpecialty: (doctor as { specialty?: string } | null)?.specialty ?? '',
     }
   }
+
+  const sentRows = (sentRes.data ?? []) as Record<string, unknown>[]
+  const pendingRows = (pendingRes.data ?? []) as Record<string, unknown>[]
 
   return NextResponse.json({
     today: todayStr,
     tomorrow: tomorrowStr,
-    sent: ((sentRes.data ?? []) as Row[]).map(mapRow),
-    pending: ((pendingRes.data ?? []) as Row[]).map(mapRow),
-    sentCount: sentRes.data?.length ?? 0,
-    pendingCount: pendingRes.data?.length ?? 0,
+    sent: sentRows.map(mapRow),
+    pending: pendingRows.map(mapRow),
+    sentCount: sentRows.length,
+    pendingCount: pendingRows.length,
   })
 }
