@@ -22,7 +22,7 @@ export function openGraphFor(path: string, title: string, description: string, e
 // Número no formato internacional, só dígitos (ex.: '5511999999999').
 // Vazio: os botões de demonstração levam ao login, como antes.
 export const CONTACT = {
-  whatsappNumber: '',
+  whatsappNumber: '5544988172909',
   demoMessage: 'Olá! Quero conhecer o AgendaAgentic e agendar uma demonstração.',
 }
 
