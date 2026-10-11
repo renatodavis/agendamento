@@ -408,7 +408,7 @@ export default function AgendaBottomPanel({ view: panelView }: { view: AgendaSec
             className="w-7 h-7 flex items-center justify-center rounded-lg border disabled:opacity-30"
             style={{ background: 'var(--card)', borderColor: 'var(--border)', color: 'var(--muted)' }}><ChevronLeft size={15} /></button>
 
-          <div className="px-2 text-center leading-tight select-none" style={{ minWidth: 132 }}>
+          <div className="px-2 text-center leading-tight select-none" style={{ minWidth: 90 }}>
             <div className="font-display font-bold text-[14px]">
               {Math.abs(dayOffset) <= 1
                 ? getDayLabel(dayOffset)
@@ -519,10 +519,10 @@ export default function AgendaBottomPanel({ view: panelView }: { view: AgendaSec
 
       {/* Body — list view */}
       {agendaView === 'list' && (
-      <div className="flex flex-1 min-h-0">
+      <div className="aa-agenda-split flex flex-1 min-h-0">
         {/* List — full width when nothing selected, 44% when detail open. Swipe left/right to change day (mobile) */}
         <div
-          className="overflow-y-auto"
+          className="aa-agenda-list overflow-y-auto"
           style={{
             width: selAppt ? '44%' : '100%',
             transition: 'width 0.2s ease',
@@ -562,6 +562,17 @@ export default function AgendaBottomPanel({ view: panelView }: { view: AgendaSec
       )}
 
       </>} {/* end agenda panel */}
+
+      <style>{`
+        @media (max-width: 767px) {
+          .aa-agenda-split { flex-direction: column; }
+          .aa-agenda-split .aa-agenda-list {
+            width: 100% !important;
+            border-right: none !important;
+            flex-shrink: 1;
+          }
+        }
+      `}</style>
     </div>
   )
 }

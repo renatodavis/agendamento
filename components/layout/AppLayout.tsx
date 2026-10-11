@@ -631,10 +631,12 @@ export default function AppLayout() {
           .aa-layout.mobile-live .aa-wa-panel { display: flex; width: 100%; border-left: none; }
           .aa-hide-mobile { display: none; }
           .aa-show-mobile { display: inline; }
-          .aa-stats-header { padding: 12px 16px 0; }
-          .aa-stats-top { flex-wrap: nowrap; align-items: center; gap: 12px; margin-bottom: 10px; }
-          .aa-hero-stat { font-size: 18px; }
-          .aa-btn-primary { height: 36px; padding: 0 14px; font-size: 13px; }
+          .aa-stats-header { padding: 12px 16px 0; overflow: hidden; }
+          .aa-stats-top { flex-wrap: nowrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+          .aa-stats-top > div:first-child { min-width: 0; }
+          .aa-hero-stat { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+          .aa-date-label { font-size: 9px; }
+          .aa-btn-primary { height: 34px; padding: 0 10px; font-size: 12px; }
           .aa-kpis { margin: 0 -16px; border-top: 1px solid var(--border); }
           .aa-kpi { padding: 8px 12px 10px; min-width: 0; }
           .aa-kpi:first-child { padding-left: 16px; }
