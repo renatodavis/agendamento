@@ -23,13 +23,13 @@ export function openGraphFor(path: string, title: string, description: string, e
 // Vazio: os botões de demonstração levam ao login, como antes.
 export const CONTACT = {
   whatsappNumber: '5544988172909',
-  demoMessage: 'Olá! Quero conhecer o AgendaAgentic e agendar uma demonstração.',
+  demoMessage: 'Olá! Quero conhecer a plataforma AgendaAgentic.',
 }
 
 export const DEMO_CTA = CONTACT.whatsappNumber
   ? {
       href: `https://wa.me/${CONTACT.whatsappNumber}?text=${encodeURIComponent(CONTACT.demoMessage)}`,
-      label: 'Quero uma demonstração',
+      label: 'Quero conhecer a plataforma',
       external: true,
     }
   : { href: '/login', label: 'Acessar o sistema', external: false }
