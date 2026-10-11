@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AgendaAgentic — Apresentação</title>
+  <meta name="description" content="Agendamento automático pelo WhatsApp com IA para clínicas, salões, barbearias e todo negócio com agenda.">
+  <meta name="robots" content="noindex">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Figtree:wght@400;500;600&display=swap">
+  <style>
+    /* ── Tokens ── */
+    :root {
+      --brand: #0e5b57; --brand-mid: #1a7a75; --brand-soft: #dcefec; --brand-ink: #0e5b57;
+      --surface: #f7f6f2; --panel: #ffffff; --sunken: #eceae4;
+      --ink: #111817; --ink-muted: #55605e; --line: #dcd9d1;
+      --wa: #25D366; --shadow: 0 2px 12px rgba(17,24,23,.08), 0 1px 3px rgba(17,24,23,.05);
+      --shadow-pop: 0 8px 32px rgba(17,24,23,.14), 0 2px 8px rgba(17,24,23,.07); --r: 16px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --brand: #5cc9bf; --brand-mid: #7fd9d0; --brand-soft: #12302e; --brand-ink: #7fd9d0;
+        --surface: #0f1413; --panel: #171d1c; --sunken: #0a0e0d;
+        --ink: #eef2f0; --ink-muted: #a0aaa7; --line: #28302e;
+        --shadow: 0 2px 12px rgba(0,0,0,.4); --shadow-pop: 0 8px 32px rgba(0,0,0,.6);
+        color-scheme: dark;
+      }
+    }
+    :root[data-theme="dark"] {
+      --brand: #5cc9bf; --brand-mid: #7fd9d0; --brand-soft: #12302e; --brand-ink: #7fd9d0;
+      --surface: #0f1413; --panel: #171d1c; --sunken: #0a0e0d;
+      --ink: #eef2f0; --ink-muted: #a0aaa7; --line: #28302e;
+      --shadow: 0 2px 12px rgba(0,0,0,.4); --shadow-pop: 0 8px 32px rgba(0,0,0,.6);
+      color-scheme: dark;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; }
+    html { background: var(--surface); }
+    body { font-family: 'Figtree', system-ui, sans-serif; font-size: 16px; line-height: 1.6; background: var(--surface); color: var(--ink); padding: 32px 16px 64px; -webkit-font-smoothing: antialiased; }
+    img { max-width: 100%; display: block; }
+
+    .wrap { max-width: 600px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+
+    h1 { font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: clamp(26px,5.5vw,38px); font-weight: 800; line-height: 1.1; letter-spacing: -.4px; }
+    h2 { font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: clamp(19px,4vw,24px); font-weight: 700; line-height: 1.2; }
+    p  { color: var(--ink-muted); line-height: 1.65; }
+    strong { color: var(--ink); font-weight: 600; }
+
+    .card { background: var(--panel); border-radius: var(--r); padding: 28px 24px; box-shadow: var(--shadow); }
+    .section-label { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--brand); margin-bottom: 8px; }
+
+    /* Hero */
+    .hero-badge { display: inline-flex; align-items: center; gap: 6px; background: var(--brand-soft); color: var(--brand-ink); font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; padding: 5px 12px; border-radius: 100px; margin-bottom: 16px; }
+    .hero-lead { font-size: 17px; color: var(--ink-muted); margin-top: 14px; line-height: 1.55; }
+    .hero-meta { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line); }
+    .hero-stat { display: flex; flex-direction: column; gap: 2px; }
+    .hero-stat-num { font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 28px; font-weight: 800; color: var(--brand); line-height: 1; }
+    .hero-stat-label { font-size: 12px; color: var(--ink-muted); }
+
+    /* Steps */
+    .step { display: flex; gap: 16px; }
+    .step-line { display: flex; flex-direction: column; align-items: center; }
+    .step-num { width: 36px; height: 36px; border-radius: 50%; background: var(--brand); color: #fff; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-weight: 800; font-size: 15px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .step-connector { width: 2px; flex: 1; min-height: 24px; background: var(--line); margin: 4px 0; }
+    .step-body { padding-bottom: 28px; min-width: 0; }
+    .step:last-child .step-body { padding-bottom: 0; }
+    .step-title { font-weight: 700; font-size: 16px; margin-bottom: 4px; color: var(--ink); }
+    .step-desc { font-size: 14px; color: var(--ink-muted); line-height: 1.5; }
+
+    /* Screenshots */
+    .sc-card { background: var(--panel); border-radius: var(--r); box-shadow: var(--shadow-pop); overflow: hidden; }
+    .sc-bar { padding: 14px 20px 12px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
+    .sc-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .sc-bar-text { font-size: 13px; font-weight: 600; color: var(--ink-muted); margin-left: 2px; }
+    .sc-img { width: 100%; object-fit: cover; }
+    .sc-caption { padding: 12px 20px; background: var(--sunken); font-size: 13px; color: var(--ink-muted); display: flex; align-items: center; gap: 8px; }
+    .sc-caption svg { flex-shrink: 0; color: var(--brand); }
+
+    .sc-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 480px) { .sc-pair { grid-template-columns: 1fr; } }
+    .sc-mini { background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); overflow: hidden; }
+    .sc-mini-label { padding: 10px 14px 8px; font-size: 12px; font-weight: 600; color: var(--ink-muted); border-bottom: 1px solid var(--line); }
+    .sc-mini img { width: 100%; height: 280px; object-fit: cover; object-position: top; }
+
+    /* Features */
+    .features { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 440px) { .features { grid-template-columns: 1fr; } }
+    .feature { background: var(--sunken); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+    .feature-icon { width: 36px; height: 36px; border-radius: 10px; background: var(--brand-soft); display: flex; align-items: center; justify-content: center; color: var(--brand-ink); }
+    .feature-title { font-size: 14px; font-weight: 700; color: var(--ink); }
+    .feature-desc { font-size: 13px; color: var(--ink-muted); line-height: 1.45; }
+
+    /* Quote */
+    .quote { border-left: 4px solid var(--brand); padding: 16px 20px; background: var(--brand-soft); border-radius: 0 12px 12px 0; font-family: 'Bricolage Grotesque', system-ui, sans-serif; font-size: 17px; font-weight: 600; color: var(--brand-ink); line-height: 1.5; }
+
+    /* Segments */
+    .segments { display: flex; flex-wrap: wrap; gap: 8px; }
+    .seg { background: var(--sunken); border-radius: 100px; padding: 6px 14px; font-size: 13px; font-weight: 600; color: var(--ink); display: flex; align-items: center; gap: 6px; }
+
+    /* CTA */
+    .cta { background: var(--brand); border-radius: var(--r); padding: 32px 24px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+    .cta h2 { color: #fff; }
+    .cta p  { color: rgba(255,255,255,.8); font-size: 15px; }
+    .btn-wa { display: inline-flex; align-items: center; gap: 10px; background: var(--wa); color: #fff; text-decoration: none; font-weight: 700; font-size: 16px; padding: 14px 28px; border-radius: 100px; box-shadow: 0 4px 16px rgba(0,0,0,.2); transition: transform .15s, box-shadow .15s; }
+    .btn-wa:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+
+    .footer { text-align: center; font-size: 13px; color: var(--ink-muted); }
+    .footer a { color: var(--brand); text-decoration: none; font-weight: 600; }
+
+    @media (prefers-reduced-motion: reduce) { .btn-wa { transition: none; } }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- HERO -->
+  <div class="card">
+    <div class="hero-badge">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg>
+      Apresentação exclusiva
+    </div>
+    <h1>Sua agenda no automático, pelo WhatsApp.</h1>
+    <p class="hero-lead">O <strong>AgendaAgentic</strong> é um assistente de IA que recebe, confirma e lembra agendamentos pelo WhatsApp — no canal que o cliente já usa, sem mudar nada na rotina da sua equipe.</p>
+    <div class="hero-meta">
+      <div class="hero-stat"><span class="hero-stat-num">24h</span><span class="hero-stat-label">disponível, inclusive fins de semana</span></div>
+      <div class="hero-stat"><span class="hero-stat-num">0</span><span class="hero-stat-label">ligações para confirmar horário</span></div>
+      <div class="hero-stat"><span class="hero-stat-num">100%</span><span class="hero-stat-label">pelo WhatsApp do cliente</span></div>
+    </div>
+  </div>
+
+  <!-- COMO FUNCIONA -->
+  <div class="card">
+    <div class="section-label">Como funciona</div>
+    <h2 style="margin-bottom:24px">Três passos. Sua equipe só cuida das exceções.</h2>
+    <div>
+      <div class="step">
+        <div class="step-line"><div class="step-num">1</div><div class="step-connector"></div></div>
+        <div class="step-body">
+          <div class="step-title">Cliente manda mensagem</div>
+          <div class="step-desc">Em linguagem natural, pelo WhatsApp do seu negócio: "quero marcar para sexta" ou "tem vaga essa semana?"</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-line"><div class="step-num">2</div><div class="step-connector"></div></div>
+        <div class="step-body">
+          <div class="step-title">IA oferece horários em tempo real</div>
+          <div class="step-desc">O assistente consulta a agenda de cada profissional, oferece os horários livres e pede confirmação.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-line"><div class="step-num">3</div></div>
+        <div class="step-body">
+          <div class="step-title">Agenda atualizada. Lembrete automático.</div>
+          <div class="step-desc">Com o SIM do cliente, o agendamento aparece no painel. Na véspera, ele recebe um lembrete e pode confirmar ou remarcar.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREENSHOT: painel + conversa -->
+  <div>
+    <p class="section-label" style="margin-bottom:10px">Veja na prática</p>
+    <div class="sc-card">
+      <div class="sc-bar">
+        <div class="sc-dot" style="background:#ef4444"></div>
+        <div class="sc-dot" style="background:#f59e0b"></div>
+        <div class="sc-dot" style="background:#22c55e"></div>
+        <span class="sc-bar-text">AgendaAgentic — Agenda + Conversa ao vivo</span>
+      </div>
+      <img class="sc-img" src="/screenshots/3.png" alt="Painel de agenda com conversa ao vivo" style="height:320px;object-position:left top;">
+      <div class="sc-caption">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Painel de agenda e conversa ao vivo com o paciente acontecendo em tempo real
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREENSHOT PAR: chat + lembretes -->
+  <div class="sc-pair">
+    <div class="sc-mini">
+      <div class="sc-mini-label">💬 IA agendando pelo WhatsApp</div>
+      <img src="/screenshots/4.png" alt="Conversa WhatsApp com IA agendando">
+    </div>
+    <div class="sc-mini">
+      <div class="sc-mini-label">🔔 Lembretes enviados automaticamente</div>
+      <img src="/screenshots/2.png" alt="Tela de lembretes enviados">
+    </div>
+  </div>
+
+  <!-- QUOTE -->
+  <div class="quote">"O cliente agenda a qualquer hora do dia ou da noite — e sua equipe só vê o horário já confirmado no painel."</div>
+
+  <!-- SCREENSHOT: agenda do dia -->
+  <div>
+    <p class="section-label" style="margin-bottom:10px">Painel de controle</p>
+    <div class="sc-card">
+      <div class="sc-bar">
+        <div class="sc-dot" style="background:#ef4444"></div>
+        <div class="sc-dot" style="background:#f59e0b"></div>
+        <div class="sc-dot" style="background:#22c55e"></div>
+        <span class="sc-bar-text">AgendaAgentic — Agenda do dia</span>
+      </div>
+      <img class="sc-img" src="/screenshots/1.png" alt="Agenda com agendamentos confirmados" style="height:300px;object-position:left top;">
+      <div class="sc-caption">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        Agendamentos criados pela IA aparecem confirmados no painel — com profissional, serviço e convênio
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREENSHOT: cancelamento -->
+  <div>
+    <p class="section-label" style="margin-bottom:10px">Sua equipe no controle</p>
+    <div class="sc-card">
+      <div class="sc-bar">
+        <div class="sc-dot" style="background:#ef4444"></div>
+        <div class="sc-dot" style="background:#f59e0b"></div>
+        <div class="sc-dot" style="background:#22c55e"></div>
+        <span class="sc-bar-text">AgendaAgentic — Aprovação de cancelamento</span>
+      </div>
+      <img class="sc-img" src="/screenshots/5.png" alt="Tela de aprovação de cancelamento" style="height:240px;object-position:left top;">
+      <div class="sc-caption">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        Cancelamentos chegam para aprovação — sua equipe decide com um toque
+      </div>
+    </div>
+  </div>
+
+  <!-- FEATURES -->
+  <div class="card">
+    <div class="section-label">O que está incluído</div>
+    <h2 style="margin-bottom:20px">Tudo que a recepção faz, em automático.</h2>
+    <div class="features">
+      <div class="feature"><div class="feature-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div class="feature-title">Disponível 24h</div><div class="feature-desc">Agendamentos à meia-noite, no fim de semana ou no feriado.</div></div>
+      <div class="feature"><div class="feature-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><div class="feature-title">Linguagem natural</div><div class="feature-desc">Entende "quinta de manhã" ou "amanhã à tarde" — sem menus numerados.</div></div>
+      <div class="feature"><div class="feature-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 13a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.06 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 17z"/></svg></div><div class="feature-title">Áudios transcritos</div><div class="feature-desc">Mensagens de voz viram texto e são respondidas normalmente.</div></div>
+      <div class="feature"><div class="feature-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div><div class="feature-title">Lembrete automático</div><div class="feature-desc">Na véspera, o cliente recebe aviso e pode confirmar ou remarcar.</div></div>
+      <div class="feature"><div class="feature-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></div><div class="feature-title">Fila de espera</div><div class="feature-desc">Horário lotado? O cliente entra na fila em vez de desistir.</div></div>
+      <div class="feature"><div class="feature-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><div class="feature-title">Multi-profissional</div><div class="feature-desc">Cada profissional com seus serviços, horários e bloqueios independentes.</div></div>
+      <div class="feature"><div class="feature-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg></div><div class="feature-title">Painel de aprovação</div><div class="feature-desc">Cancelamentos e remarcações chegam para a equipe decidir com um toque.</div></div>
+      <div class="feature"><div class="feature-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg></div><div class="feature-title">Vocabulário do negócio</div><div class="feature-desc">Fala a língua da sua área: paciente, cliente, consulta, atendimento.</div></div>
+    </div>
+  </div>
+
+  <!-- SEGMENTOS -->
+  <div class="card">
+    <div class="section-label">Feito para quem vive de agenda</div>
+    <h2 style="margin-bottom:16px">Se o seu negócio atende com hora marcada, o AgendaAgentic se encaixa.</h2>
+    <div class="segments">
+      <div class="seg"><span>🏥</span> Clínicas médicas</div>
+      <div class="seg"><span>🦷</span> Dentistas</div>
+      <div class="seg"><span>✨</span> Estética</div>
+      <div class="seg"><span>💇</span> Salões de beleza</div>
+      <div class="seg"><span>✂️</span> Barbearias</div>
+      <div class="seg"><span>🧘</span> Psicólogos</div>
+      <div class="seg"><span>🏋️</span> Personal trainers</div>
+      <div class="seg"><span>📚</span> Reforço escolar</div>
+      <div class="seg"><span>🐾</span> Veterinários</div>
+      <div class="seg"><span>⚖️</span> Advogados</div>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta">
+    <div>
+      <h2>Quer ver funcionando no seu negócio?</h2>
+      <p style="margin-top:10px">Fale comigo agora pelo WhatsApp e agendamos uma conversa rápida — você vê a IA em ação com a sua agenda real.</p>
+    </div>
+    <a class="btn-wa" href="https://wa.me/5544988172909?text=Ol%C3%A1%21+Vi+a+apresenta%C3%A7%C3%A3o+do+AgendaAgentic+e+quero+conhecer+a+plataforma." target="_blank" rel="noopener noreferrer">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+      Falar agora
+    </a>
+    <span style="font-size:13px;color:rgba(255,255,255,.6)">agendaagentic.app</span>
+  </div>
+
+  <div class="footer">
+    <p>AgendaAgentic · <a href="https://www.agendaagentic.app">agendaagentic.app</a></p>
+  </div>
+
+</div>
+</body>
+</html>
