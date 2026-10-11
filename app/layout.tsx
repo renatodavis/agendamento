@@ -1,7 +1,10 @@
 import type { Metadata } from 'next'
 import { Bricolage_Grotesque, Figtree, DM_Mono } from 'next/font/google'
+import Script from 'next/script'
 import { SITE_URL, SITE_NAME, HOME_TITLE, HOME_DESCRIPTION, openGraphFor } from '@/lib/site'
 import './globals.css'
+
+const GA_ID = process.env.NEXT_PUBLIC_GA_ID
 
 const bricolage = Bricolage_Grotesque({
   variable: '--font-bricolage',
@@ -40,6 +43,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR" className={`${bricolage.variable} ${figtree.variable} ${dmMono.variable} h-full`}>
       <body className="h-full font-sans antialiased bg-background text-foreground">
         {children}
+        {GA_ID && <>
+          <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_ID}`} strategy="afterInteractive" />
+          <Script id="ga4-init" strategy="afterInteractive">{`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', '${GA_ID}', { page_path: window.location.pathname });
+          `}</Script>
+        </>}
       </body>
     </html>
   )
