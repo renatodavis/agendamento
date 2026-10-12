@@ -529,14 +529,15 @@ export default function AgendaBottomPanel({ view: panelView }: { view: AgendaSec
             borderRight: selAppt ? '1px solid var(--border)' : 'none',
             flexShrink: 0,
             position: 'relative',
+            isolation: 'isolate',
           }}
           {...swipeHandlers}>
 
-          {/* Watermark */}
-          <div style={{
+          {/* Watermark — isolation:isolate no pai isola o z-index:-1 aqui dentro */}
+          <div aria-hidden style={{
             position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
             alignItems: 'center', justifyContent: 'center', pointerEvents: 'none',
-            gap: 14, opacity: 0.055, userSelect: 'none', zIndex: 0,
+            gap: 14, opacity: 0.055, userSelect: 'none', zIndex: -1,
           }}>
             <svg width="80" height="80" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
               <rect width="64" height="64" rx="16" fill="#0e5b57"/>
@@ -548,7 +549,6 @@ export default function AgendaBottomPanel({ view: panelView }: { view: AgendaSec
               whiteSpace: 'nowrap',
             }}>AgendaAgentic</span>
           </div>
-          <div style={{ position: 'relative', zIndex: 1 }}>
           {loading && (
             <div className="flex items-center justify-center h-20 gap-2 text-sm" style={{ color: 'var(--muted)' }}>
               <span className="w-4 h-4 border-2 rounded-full animate-spin"
@@ -569,7 +569,6 @@ export default function AgendaBottomPanel({ view: panelView }: { view: AgendaSec
               onSelect={() => setSelId(prev => prev === a.id ? null : a.id)}
               onAttend={handleAttend} />
           ))}
-          </div>
         </div>
 
         {/* Detail — only when selected */}
