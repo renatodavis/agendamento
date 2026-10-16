@@ -91,12 +91,20 @@ function verifySignature(rawBody: string, signature: string | null): boolean {
 
 // ── GET: Meta webhook verification handshake ─────────────────────────
 export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url)
+  const mode  = searchParams.get('hub.mode')
+  const token = searchParams.get('hub.verify_token')
+
+  // Health check do Meta (facebookexternalua) sem parâmetros — responde OK
+  if (!mode && !token) {
+    return new Response('OK', { status: 200 })
+  }
+
   if (!VERIFY_TOKEN) {
     console.error('[whatsapp/GET] WHATSAPP_VERIFY_TOKEN não configurado')
     return new Response('Forbidden', { status: 403 })
   }
-  const { searchParams } = new URL(req.url)
-  if (searchParams.get('hub.mode') === 'subscribe' && searchParams.get('hub.verify_token') === VERIFY_TOKEN) {
+  if (mode === 'subscribe' && token === VERIFY_TOKEN) {
     return new Response(searchParams.get('hub.challenge'), { status: 200 })
   }
   return new Response('Forbidden', { status: 403 })
