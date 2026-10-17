@@ -43,7 +43,7 @@ export default function LandingPage() {
               <span className="lp-h1-main">Agendamentos que <em>acontecem sozinhos</em></span>
             </h1>
             <p className="mk-lead">
-              Para clínicas, salões, barbearias e todo negócio que vive de agenda. Seu cliente manda uma mensagem;
+              Para clínicas, consultórios e outros negócios que vivem de agenda. Seu cliente manda uma mensagem;
               a IA entende, consulta a agenda, confirma e lembra na véspera. Sua equipe só cuida das exceções.
             </p>
             <div className="mk-actions">
