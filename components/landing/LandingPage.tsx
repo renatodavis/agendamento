@@ -61,15 +61,15 @@ export default function LandingPage() {
               </div>
             </div>
             <div className="lp-phone-body">
-              <div className="mk-bubble out">Oi! Tem horário amanhã com a Carla?</div>
-              <div className="mk-bubble in">Olá! A Carla tem amanhã às 10h, 14h30 ou 16h. Qual prefere?</div>
-              <div className="mk-bubble out">10h, pra corte e escova</div>
-              <div className="mk-bubble in">Corte e escova com a Carla amanhã às 10h. Responda SIM para confirmar.</div>
+              <div className="mk-bubble out">Oi! Tem horário amanhã com a Dra. Ana?</div>
+              <div className="mk-bubble in">Olá! A Dra. Ana tem amanhã às 9h, 10h30 ou 15h. Qual prefere?</div>
+              <div className="mk-bubble out">10h30, consulta de rotina</div>
+              <div className="mk-bubble in">Consulta com a Dra. Ana amanhã às 10h30. Responda SIM para confirmar.</div>
               <div className="mk-bubble out">SIM</div>
               <div className="lp-confirm">
-                <div className="lp-confirm-title"><CheckCircle2 size={16} /> Agendamento confirmado</div>
-                <div>Carla · Corte e escova</div>
-                <div>Amanhã, 10h00</div>
+                <div className="lp-confirm-title"><CheckCircle2 size={16} /> Consulta confirmada</div>
+                <div>Dra. Ana · Clínico Geral</div>
+                <div>Amanhã, 10h30</div>
               </div>
             </div>
           </div>
